@@ -18,10 +18,11 @@ import { sendToDaemon } from './daemon/client.js';
 import { isDaemonRunning } from './daemon/socket.js';
 import { logger } from './logger.js';
 import { TelegramAuthError } from './telegram.js';
+import { loadPackageVersion } from './version.js';
 
 dotenvConfig();
 
-const VERSION = '1.0.0';
+const VERSION = loadPackageVersion();
 
 // ─── arg parsing ─────────────────────────────────────────────────────
 

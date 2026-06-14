@@ -13,10 +13,11 @@ import { join } from 'node:path';
 import { daemonSocketPath, isDaemonRunning } from '../daemon/socket.js';
 import { listAccounts } from '../state.js';
 import { clientForAccount, credentialsStatus } from '../telegram.js';
+import { loadPackageVersion } from '../version.js';
 import type { Cmd } from './_shared.js';
 import { flagStr, print } from './_shared.js';
 
-const VERSION = '1.0.0';
+const VERSION = loadPackageVersion();
 
 interface Check {
   check: string;
