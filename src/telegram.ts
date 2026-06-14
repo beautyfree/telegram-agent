@@ -121,7 +121,10 @@ function normalizeSentCodeKind(value: unknown): string {
     ((value as any)?.className as string | undefined) ||
     ((value as any)?.constructor?.name as string | undefined) ||
     '';
-  const normalized = raw.replace(/^auth[._]/i, '').replace(/^SentCodeType/i, '').replace(/^CodeType/i, '');
+  const normalized = raw
+    .replace(/^auth[._]/i, '')
+    .replace(/^SentCodeType/i, '')
+    .replace(/^CodeType/i, '');
   switch (normalized.toLowerCase()) {
     case 'app':
       return 'telegram_app';
@@ -229,10 +232,7 @@ export async function loginSubmitPassword(authId: string, password: string): Pro
   return { account };
 }
 
-export async function finalizeAuthorizedClient(
-  client: TelegramClient,
-  phoneHint?: string,
-): Promise<AccountRecord> {
+export async function finalizeAuthorizedClient(client: TelegramClient, phoneHint?: string): Promise<AccountRecord> {
   const me = await client.getMe();
   const telegramId = (me as any)?.id?.toString();
   const username = (me as any)?.username as string | undefined;

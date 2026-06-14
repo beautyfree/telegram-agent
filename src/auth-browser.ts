@@ -9,16 +9,15 @@ import { TelegramClient } from 'telegram';
 
 import { renderAuthPage } from './auth-page.js';
 import { logger } from './logger.js';
-import { type AccountRecord, listAccounts, setStoredCredentials } from './state.js';
 import { FileSession } from './session.js';
+import { type AccountRecord, listAccounts, setStoredCredentials } from './state.js';
 import {
   clientForAccount,
   credentialsStatus,
   finalizeAuthorizedClient,
   getApiCredentials,
-  type LoginCodeDeliveryHint,
-  loginStart,
   loginResendCode,
+  loginStart,
   loginSubmitCode,
   loginSubmitPassword,
   TelegramAuthError,
@@ -127,7 +126,9 @@ export function runBrowserLogin(opts: { timeoutMs?: number } = {}): Promise<Acco
       qrLogin.status = 'waiting_scan';
       qrLogin.startPromise = (async () => {
         const { apiId, apiHash } = getApiCredentials();
-        const session = new FileSession(join(process.env.HOME || '', '.telegram-agent', 'sessions', `_pending_qr_${authId}`));
+        const session = new FileSession(
+          join(process.env.HOME || '', '.telegram-agent', 'sessions', `_pending_qr_${authId}`),
+        );
         const client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 3 });
         await client.connect();
         try {
