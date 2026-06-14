@@ -148,6 +148,7 @@ export function renderAuthPage(
   .hint b { font-weight: 600; }
   .hint a { color: var(--accent); }
   .accounts { display: flex; flex-direction: column; gap: 6px; }
+  .stack-actions { display: flex; flex-direction: column; gap: 8px; }
   .account {
     display: flex; justify-content: space-between; align-items: center;
     padding: 10px 12px;
@@ -195,6 +196,27 @@ export function renderAuthPage(
     font-size: 11.5px;
     margin-top: -4px;
   }
+  .qr-box {
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--input) 82%, white 18%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-height: 288px;
+    padding: 14px;
+  }
+  .qr-box img {
+    width: 264px;
+    height: 264px;
+    display: block;
+    border-radius: 8px;
+  }
+  .qr-note {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.5;
+  }
 </style>
 </head>
 <body>
@@ -218,7 +240,10 @@ export function renderAuthPage(
       <h1>Sign in</h1>
       <p class="lede">Use an account or add another.</p>
       <div class="accounts" id="accounts"></div>
-      <button id="add-new" class="ghost"><span class="label">Add account</span></button>
+      <div class="stack-actions">
+        <button id="add-new" class="ghost"><span class="label">Use phone</span></button>
+        <button id="open-qr" class="ghost"><span class="label">Use QR instead</span></button>
+      </div>
     </div>
 
     <div id="step-phone" class="step">
@@ -227,6 +252,7 @@ export function renderAuthPage(
       <div class="meta-line"><span>Bundled credentials active</span><span id="phone-state"></span></div>
       <input id="phone" type="tel" autocomplete="tel" placeholder="+12025550123" />
       <button id="send-code"><span class="spinner" aria-hidden="true"></span><span class="label">Send code</span></button>
+      <button id="open-qr-phone" class="ghost" type="button"><span class="label">Use QR instead</span></button>
       <div class="err" id="err-phone"></div>
       <details class="mini-config">
         <summary>Use different API credentials</summary>
@@ -241,6 +267,18 @@ export function renderAuthPage(
           <div class="err" id="err-creds-inline"></div>
         </div>
       </details>
+    </div>
+
+    <div id="step-qr" class="step">
+      <h1>QR login</h1>
+      <p class="lede">Scan in Telegram on another signed-in device.</p>
+      <div class="qr-box" id="qr-box">
+        <div class="qr-note" id="qr-loading">Generating QR…</div>
+      </div>
+      <div class="hint" id="qr-hint"></div>
+      <p class="qr-note">In Telegram: Settings → Devices → Link Desktop Device.</p>
+      <button id="refresh-qr" class="ghost" type="button"><span class="spinner" aria-hidden="true"></span><span class="label">Refresh QR</span></button>
+      <div class="err" id="err-qr"></div>
     </div>
 
     <div id="step-code" class="step">
@@ -259,6 +297,7 @@ export function renderAuthPage(
     <div id="step-password" class="step">
       <h1>2FA password</h1>
       <p class="lede">Enter your Telegram password.</p>
+      <div class="hint" id="password-hint"></div>
       <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
       <button id="submit-password"><span class="spinner" aria-hidden="true"></span><span class="label">Continue</span></button>
       <div class="err" id="err-password"></div>
@@ -285,6 +324,9 @@ export function renderAuthPage(
   const env = ${envJson};
   let delivery = null;
   let resendTimer = null;
+  let qrPoller = null;
+  let passwordMode = 'phone';
+  let passwordHintText = '';
 
   const $ = (id) => document.getElementById(id);
   const show = (id) => {
@@ -406,6 +448,81 @@ export function renderAuthPage(
     $('phone-state').textContent = creds.source === 'stored' ? 'Custom override' : creds.source === 'env' ? 'Env override' : 'Default';
   }
 
+  function stopQrPolling() {
+    if (qrPoller) {
+      clearInterval(qrPoller);
+      qrPoller = null;
+    }
+  }
+
+  function setPasswordHint(hint) {
+    passwordHintText = hint || '';
+    clearHint('password-hint');
+    if (!passwordHintText) return;
+    showHint('password-hint', '<b>Hint:</b> ' + escapeHtml(passwordHintText));
+  }
+
+  function renderQrState(body) {
+    clearErr('err-qr');
+    clearHint('qr-hint');
+    if (body.error) showErr('err-qr', presentCodeError(body.error));
+    if (body.qrImage) {
+      $('qr-box').innerHTML = '<img alt="Telegram QR login" src="' + body.qrImage + '" />';
+    } else if (body.status === 'password_needed') {
+      $('qr-box').innerHTML = '<div class="qr-note">QR scanned. Password required.</div>';
+    } else {
+      $('qr-box').innerHTML = '<div class="qr-note" id="qr-loading">Generating QR…</div>';
+    }
+    if (body.status === 'waiting_scan') {
+      showHint('qr-hint', '<b>Next:</b> open Telegram on a signed-in phone, then go to <b>Settings → Devices → Link Desktop Device</b> and scan this QR.');
+    }
+    if (body.status === 'password_needed') {
+      passwordMode = 'qr';
+      setPasswordHint(body.passwordHint);
+      showHint('qr-hint', '<b>Next:</b> QR accepted. Enter your Telegram password to finish sign-in.');
+      show('step-password');
+      stopQrPolling();
+    }
+    if (body.status === 'authorized') {
+      stopQrPolling();
+      finish();
+    }
+  }
+
+  async function fetchQrState(path) {
+    const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID }) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || 'Failed');
+    return body;
+  }
+
+  async function startQrFlow() {
+    stopQrPolling();
+    passwordMode = 'qr';
+    setPasswordHint('');
+    show('step-qr');
+    showHint('qr-hint', '<b>Next:</b> generating a QR code for this browser session…');
+    setLoading('refresh-qr', true, 'Loading');
+    $('qr-box').innerHTML = '<div class="qr-note" id="qr-loading">Generating QR…</div>';
+    try {
+      const body = await fetchQrState('/authorize/qr-start');
+      renderQrState(body);
+      qrPoller = setInterval(async () => {
+        try {
+          const next = await fetchQrState('/authorize/qr-status');
+          renderQrState(next);
+        } catch (err) {
+          showErr('err-qr', (err && err.message) || 'Failed');
+          stopQrPolling();
+        }
+      }, 2000);
+    } catch (err) {
+      showErr('err-qr', (err && err.message) || 'Failed');
+    } finally {
+      setLoading('refresh-qr', false, 'Refresh QR');
+    }
+  }
+
   async function pickExisting(accountId) {
     const r = await fetch('/authorize/use-account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, account_id: accountId }) });
     if (r.status === 401) {
@@ -456,6 +573,9 @@ export function renderAuthPage(
   };
 
   $('add-new').onclick = () => show('step-phone');
+  $('open-qr').onclick = () => startQrFlow();
+  $('open-qr-phone').onclick = () => startQrFlow();
+  $('refresh-qr').onclick = () => startQrFlow();
 
   $('send-code').onclick = async () => {
     clearErr('err-phone');
@@ -471,6 +591,7 @@ export function renderAuthPage(
       }
       const body = await r.json().catch(() => ({}));
       delivery = body.delivery || null;
+      passwordMode = 'phone';
       $('phone-echo').textContent = phone;
       renderDeliveryHint(delivery);
       show('step-code');
@@ -486,7 +607,11 @@ export function renderAuthPage(
       const r = await fetch('/authorize/login-code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, code }) });
       const body = await r.json();
       if (!r.ok) return showErr('err-code', presentCodeError(body.error));
-      if (body.status === 'password_needed') return show('step-password');
+      if (body.status === 'password_needed') {
+        passwordMode = 'phone';
+        setPasswordHint(body.passwordHint);
+        return show('step-password');
+      }
       finish();
     } finally { setLoading('submit-code', false, 'Continue'); }
   };
@@ -517,6 +642,7 @@ export function renderAuthPage(
 
   $('submit-password').onclick = async () => {
     clearErr('err-password');
+    setPasswordHint(passwordHintText);
     const password = $('password').value;
     if (!password) return showErr('err-password', 'Password required');
     setLoading('submit-password', true, 'Checking');

@@ -4,15 +4,21 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import open from 'open';
+import QRCode from 'qrcode';
+import { TelegramClient } from 'telegram';
 
 import { renderAuthPage } from './auth-page.js';
 import { logger } from './logger.js';
 import { type AccountRecord, listAccounts, setStoredCredentials } from './state.js';
+import { FileSession } from './session.js';
 import {
   clientForAccount,
   credentialsStatus,
+  finalizeAuthorizedClient,
+  getApiCredentials,
   type LoginCodeDeliveryHint,
   loginStart,
+  loginResendCode,
   loginSubmitCode,
   loginSubmitPassword,
   TelegramAuthError,
@@ -34,8 +40,18 @@ function loadPkgMeta(): { name: string; version: string; repoUrl?: string } {
 
 const pkgMeta = loadPkgMeta();
 
-function isKnownDeliveryType(value: string | undefined): value is Exclude<LoginCodeDeliveryHint['type'], undefined> {
-  return !!value;
+type QrStatus = 'idle' | 'waiting_scan' | 'password_needed' | 'authorized' | 'error';
+
+interface PendingQrLogin {
+  status: QrStatus;
+  qrUrl?: string;
+  qrImage?: string;
+  expiresAt?: number;
+  passwordHint?: string;
+  error?: string;
+  account?: AccountRecord;
+  startPromise?: Promise<AccountRecord>;
+  passwordResolver?: (password: string) => void;
 }
 
 /**
@@ -49,6 +65,7 @@ function isKnownDeliveryType(value: string | undefined): value is Exclude<LoginC
 export function runBrowserLogin(opts: { timeoutMs?: number } = {}): Promise<AccountRecord> {
   const timeoutMs = opts.timeoutMs ?? 10 * 60_000;
   const authId = randomBytes(16).toString('base64url');
+  const qrLogin: PendingQrLogin = { status: 'idle' };
 
   return new Promise<AccountRecord>((resolve, reject) => {
     let serverClosed = false;
@@ -102,6 +119,65 @@ export function runBrowserLogin(opts: { timeoutMs?: number } = {}): Promise<Acco
         logger.warn(`Failed to auto-open the browser. Open this URL manually: ${authUrl}`);
       }
     });
+
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    async function ensureQrLoginStarted(): Promise<PendingQrLogin> {
+      if (qrLogin.startPromise) return qrLogin;
+      qrLogin.status = 'waiting_scan';
+      qrLogin.startPromise = (async () => {
+        const { apiId, apiHash } = getApiCredentials();
+        const session = new FileSession(join(process.env.HOME || '', '.telegram-agent', 'sessions', `_pending_qr_${authId}`));
+        const client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 3 });
+        await client.connect();
+        try {
+          const user = await client.signInUserWithQrCode(
+            { apiId, apiHash },
+            {
+              qrCode: async ({ token, expires }) => {
+                const qrUrl = `tg://login?token=${token.toString('base64url')}`;
+                qrLogin.qrUrl = qrUrl;
+                qrLogin.qrImage = await QRCode.toDataURL(qrUrl, {
+                  errorCorrectionLevel: 'M',
+                  margin: 1,
+                  width: 264,
+                  color: { dark: '#111827', light: '#ffffff' },
+                });
+                qrLogin.expiresAt = typeof expires === 'number' ? expires * 1000 : Date.now() + 30_000;
+                qrLogin.status = 'waiting_scan';
+              },
+              password: async (hint?: string) => {
+                qrLogin.status = 'password_needed';
+                qrLogin.passwordHint = hint || undefined;
+                return await new Promise<string>((resolvePassword) => {
+                  qrLogin.passwordResolver = resolvePassword;
+                });
+              },
+              onError: async (err) => {
+                qrLogin.error = err.message;
+                qrLogin.status = 'error';
+                return true;
+              },
+            },
+          );
+          const account = await finalizeAuthorizedClient(client, (user as any)?.phone);
+          qrLogin.account = account;
+          qrLogin.status = 'authorized';
+          settlePromise(() => resolve(account));
+          return account;
+        } catch (err) {
+          qrLogin.error = (err as Error).message;
+          qrLogin.status = 'error';
+          throw err;
+        }
+      })();
+
+      for (let i = 0; i < 20; i++) {
+        if (qrLogin.qrImage || qrLogin.error) break;
+        await sleep(100);
+      }
+      return qrLogin;
+    }
 
     async function route(req: IncomingMessage, res: ServerResponse) {
       const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -170,7 +246,7 @@ export function runBrowserLogin(opts: { timeoutMs?: number } = {}): Promise<Acco
         try {
           const result = await loginSubmitCode(authId, String(body.code));
           if (result.status === 'password_needed') {
-            return sendJson(res, 200, { status: 'password_needed' });
+            return sendJson(res, 200, { status: 'password_needed', passwordHint: result.passwordHint });
           }
           settlePromise(() => resolve(result.account));
           return sendJson(res, 200, { redirect: '/done' });
@@ -179,15 +255,57 @@ export function runBrowserLogin(opts: { timeoutMs?: number } = {}): Promise<Acco
         }
       }
 
+      if (url.pathname === '/authorize/login-resend') {
+        try {
+          const delivery = await loginResendCode(authId);
+          return sendJson(res, 200, { ok: true, delivery });
+        } catch (err) {
+          return sendJson(res, 400, { error: (err as Error).message });
+        }
+      }
+
       if (url.pathname === '/authorize/login-password') {
         if (!body.password) return sendJson(res, 400, { error: 'password is required' });
         try {
+          if (qrLogin.status === 'password_needed' && qrLogin.passwordResolver) {
+            qrLogin.passwordResolver(String(body.password));
+            qrLogin.passwordResolver = undefined;
+            const account = qrLogin.startPromise ? await qrLogin.startPromise : undefined;
+            if (!account) throw new Error('QR login not started');
+            settlePromise(() => resolve(account));
+            return sendJson(res, 200, { redirect: '/done' });
+          }
           const { account } = await loginSubmitPassword(authId, String(body.password));
           settlePromise(() => resolve(account));
           return sendJson(res, 200, { redirect: '/done' });
         } catch (err) {
           return sendJson(res, 400, { error: (err as Error).message });
         }
+      }
+
+      if (url.pathname === '/authorize/qr-start') {
+        try {
+          await ensureQrLoginStarted();
+          return sendJson(res, 200, {
+            status: qrLogin.status,
+            qrImage: qrLogin.qrImage,
+            expiresAt: qrLogin.expiresAt,
+            passwordHint: qrLogin.passwordHint,
+            error: qrLogin.error,
+          });
+        } catch (err) {
+          return sendJson(res, 400, { error: (err as Error).message });
+        }
+      }
+
+      if (url.pathname === '/authorize/qr-status') {
+        return sendJson(res, 200, {
+          status: qrLogin.status,
+          qrImage: qrLogin.qrImage,
+          expiresAt: qrLogin.expiresAt,
+          passwordHint: qrLogin.passwordHint,
+          error: qrLogin.error,
+        });
       }
 
       if (url.pathname === '/authorize/use-account') {

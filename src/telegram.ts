@@ -46,6 +46,10 @@ function apiCreds(): { apiId: number; apiHash: string } {
   };
 }
 
+export function getApiCredentials(): { apiId: number; apiHash: string } {
+  return apiCreds();
+}
+
 function sessionPathFor(accountId: string): string {
   const dir = join(sessionsDir, accountId);
   mkdirSync(dir, { recursive: true });
@@ -172,7 +176,22 @@ export async function loginStart(authId: string, phone: string): Promise<LoginCo
   return normalizeSentCodeDelivery(result as any);
 }
 
-export type LoginCodeResult = { status: 'ok'; account: AccountRecord } | { status: 'password_needed' };
+export async function loginResendCode(authId: string): Promise<LoginCodeDeliveryHint> {
+  const entry = pending.get(authId);
+  if (!entry?.phoneCodeHash) throw new Error('Login session not found');
+  const result = await entry.client.invoke(
+    new Api.auth.ResendCode({
+      phoneNumber: entry.phone,
+      phoneCodeHash: entry.phoneCodeHash,
+    }),
+  );
+  entry.phoneCodeHash = (result as any).phoneCodeHash || entry.phoneCodeHash;
+  return normalizeSentCodeDelivery(result as any);
+}
+
+export type LoginCodeResult =
+  | { status: 'ok'; account: AccountRecord }
+  | { status: 'password_needed'; passwordHint?: string };
 
 export async function loginSubmitCode(authId: string, code: string): Promise<LoginCodeResult> {
   const entry = pending.get(authId);
@@ -191,7 +210,10 @@ export async function loginSubmitCode(authId: string, code: string): Promise<Log
   } catch (err) {
     if ((err as any).errorMessage === 'SESSION_PASSWORD_NEEDED') {
       entry.passwordSrp = await entry.client.invoke(new Api.account.GetPassword());
-      return { status: 'password_needed' };
+      return {
+        status: 'password_needed',
+        passwordHint: ((entry.passwordSrp as any)?.hint as string | undefined) || undefined,
+      };
     }
     throw err;
   }
@@ -207,30 +229,37 @@ export async function loginSubmitPassword(authId: string, password: string): Pro
   return { account };
 }
 
-async function finalizeLogin(authId: string, entry: PendingLogin): Promise<AccountRecord> {
-  const me = await entry.client.getMe();
+export async function finalizeAuthorizedClient(
+  client: TelegramClient,
+  phoneHint?: string,
+): Promise<AccountRecord> {
+  const me = await client.getMe();
   const telegramId = (me as any)?.id?.toString();
   const username = (me as any)?.username as string | undefined;
+  const phone = phoneHint || (me as any)?.phone || '';
   const accountId = telegramId || `acct_${Date.now()}`;
 
-  // Promote the pending session to its permanent location.
   const finalDir = sessionPathFor(accountId);
   const { apiId, apiHash } = apiCreds();
   const finalSession = new FileSession(finalDir);
   await finalSession.load();
-  const src = entry.client.session as any;
+  const src = client.session as any;
   (finalSession as any).setDC?.(src.dcId, src.serverAddress, src.port);
   (finalSession as any).setAuthKey?.(src.authKey);
   await finalSession.save();
 
-  await entry.client.disconnect();
+  await client.disconnect();
 
   const promoted = new TelegramClient(finalSession, apiId, apiHash, { connectionRetries: 5 });
   await promoted.connect();
   clientCache.set(accountId, promoted);
 
+  return upsertAccount({ id: accountId, phone, username, telegram_id: telegramId });
+}
+
+async function finalizeLogin(authId: string, entry: PendingLogin): Promise<AccountRecord> {
   void authId; // pending dir is left on disk; harmless, can be GC'd later
-  return upsertAccount({ id: accountId, phone: entry.phone, username, telegram_id: telegramId });
+  return finalizeAuthorizedClient(entry.client, entry.phone);
 }
 
 export function getAccountSafe(id: string): AccountRecord | undefined {
