@@ -110,10 +110,24 @@ export function renderAuthPage(
     border: 0; border-radius: 8px;
     background: var(--accent); color: white;
     font-size: 14px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: opacity .16s ease, border-color .16s ease, color .16s ease, background-color .16s ease;
   }
   button[disabled] { opacity: 0.5; cursor: not-allowed; }
   button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
   button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 1.75px solid currentColor;
+    border-right-color: transparent;
+    display: none;
+    animation: spin .72s linear infinite;
+  }
+  button.loading .spinner { display: inline-block; }
+  button.loading .label { opacity: 0.9; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .err {
     padding: 8px 10px;
     background: rgba(255,92,92,0.1); color: var(--danger);
@@ -153,33 +167,6 @@ export function renderAuthPage(
   }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .foot {
-    padding: 10px 18px;
-    border-top: 1px solid var(--border);
-    font-size: 12px;
-  }
-  details summary {
-    color: var(--muted); cursor: pointer; user-select: none;
-    list-style: none; display: flex; align-items: center; gap: 6px;
-  }
-  details summary::-webkit-details-marker { display: none; }
-  details summary::before { content: "▸"; display: inline-block; transition: transform .15s; }
-  details[open] summary::before { transform: rotate(90deg); }
-  .envs {
-    margin-top: 10px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
-    display: flex; flex-direction: column;
-  }
-  .env-row {
-    display: grid; grid-template-columns: max-content 1fr;
-    gap: 12px; padding: 4px 0;
-    align-items: baseline;
-  }
-  .env-row + .env-row { border-top: 1px dashed var(--border); }
-  .env-key { color: var(--muted); }
-  .env-val { color: var(--fg); word-break: break-all; text-align: right; }
-  .env-val.unset { color: var(--muted); font-style: italic; }
   .mini-config {
     margin-top: -2px;
     border: 1px dashed var(--border);
@@ -199,13 +186,22 @@ export function renderAuthPage(
   .code-actions { display: flex; gap: 8px; align-items: center; }
   .code-actions button { width: auto; min-width: 116px; }
   .code-status { font-size: 11.5px; color: var(--muted); }
+  .meta-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 11.5px;
+    margin-top: -4px;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 <div class="header">
   ${logoHtml}
-  <p class="brand-line"><b>${brandLink}</b> &middot; local sign-in</p>
+  <p class="brand-line"><b>${brandLink}</b> &middot; sign in</p>
 </div>
 <div class="card">
   <div class="body">
@@ -220,26 +216,26 @@ export function renderAuthPage(
 
     <div id="step-pick" class="step">
       <h1>Sign in</h1>
-      <p class="lede">Pick an account or add a new one.</p>
+      <p class="lede">Use an account or add another.</p>
       <div class="accounts" id="accounts"></div>
-      <button id="add-new" class="ghost">Add account</button>
+      <button id="add-new" class="ghost"><span class="label">Add account</span></button>
     </div>
 
     <div id="step-phone" class="step">
       <h1>Phone</h1>
-      <p class="lede">Include country code.</p>
-      <p class="subtle">Using bundled API credentials by default.</p>
+      <p class="lede">Enter your number with country code.</p>
+      <div class="meta-line"><span>Bundled credentials active</span><span id="phone-state"></span></div>
       <input id="phone" type="tel" autocomplete="tel" placeholder="+12025550123" />
-      <button id="send-code">Send code</button>
+      <button id="send-code"><span class="spinner" aria-hidden="true"></span><span class="label">Send code</span></button>
       <div class="err" id="err-phone"></div>
       <details class="mini-config">
         <summary>Use different API credentials</summary>
-        <p class="lede">Optional override. Environment variables still win if they are set.</p>
+        <p class="lede">Optional override. Environment variables still win.</p>
         <div class="stack">
           <input id="api_id_inline" inputmode="numeric" placeholder="api_id" />
           <input id="api_hash_inline" placeholder="api_hash" />
           <div class="row">
-            <button id="save-creds-inline" class="ghost" type="button">Save override</button>
+            <button id="save-creds-inline" class="ghost" type="button"><span class="spinner" aria-hidden="true"></span><span class="label">Save override</span></button>
             <span class="status" id="creds-status"></span>
           </div>
           <div class="err" id="err-creds-inline"></div>
@@ -249,22 +245,22 @@ export function renderAuthPage(
 
     <div id="step-code" class="step">
       <h1>Code</h1>
-      <p class="lede">Sent to <span id="phone-echo"></span>.</p>
+      <p class="lede">Enter the code for <span id="phone-echo"></span>.</p>
       <div class="hint" id="delivery-hint"></div>
       <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345" />
       <div class="code-actions">
-        <button id="resend-code" class="ghost" type="button">Resend code</button>
+        <button id="resend-code" class="ghost" type="button"><span class="spinner" aria-hidden="true"></span><span class="label">Resend</span></button>
         <span class="code-status" id="resend-status"></span>
       </div>
-      <button id="submit-code">Continue</button>
+      <button id="submit-code"><span class="spinner" aria-hidden="true"></span><span class="label">Continue</span></button>
       <div class="err" id="err-code"></div>
     </div>
 
     <div id="step-password" class="step">
       <h1>2FA password</h1>
-      <p class="lede">Your Telegram cloud password.</p>
+      <p class="lede">Enter your Telegram password.</p>
       <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
-      <button id="submit-password">Continue</button>
+      <button id="submit-password"><span class="spinner" aria-hidden="true"></span><span class="label">Continue</span></button>
       <div class="err" id="err-password"></div>
     </div>
 
@@ -272,20 +268,14 @@ export function renderAuthPage(
       <div class="success">
         <div class="check" id="done-check">&check;</div>
         <h1 id="done-title">Signed in</h1>
-        <p class="lede" id="done-lede">All set — close this tab.</p>
+        <p class="lede" id="done-lede">All set. You can close this tab.</p>
       </div>
     </div>
   </div>
 
-  <div class="foot">
-    <details>
-      <summary>Environment</summary>
-      <div class="envs" id="env-table"></div>
-    </details>
-  </div>
 </div>
 
-<p class="safety">Everything runs on your machine. Inputs go directly to Telegram's MTProto servers, nothing is sent anywhere else.</p>
+<p class="safety">Runs locally. Data goes to Telegram only.</p>
 </div>
 
 <script>
@@ -306,6 +296,14 @@ export function renderAuthPage(
   const showHint = (id, msg) => { const el = $(id); el.innerHTML = msg; el.classList.add('show'); };
   const clearHint = (id) => { const el = $(id); el.classList.remove('show'); el.innerHTML = ''; };
   const setText = (id, msg) => { $(id).textContent = msg || ''; };
+  const setLoading = (id, loading, label) => {
+    const button = $(id);
+    if (!button) return;
+    button.classList.toggle('loading', !!loading);
+    button.disabled = !!loading;
+    const text = button.querySelector('.label');
+    if (text && label) text.textContent = label;
+  };
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -322,17 +320,6 @@ export function renderAuthPage(
       div.onclick = () => pickExisting(a.id);
       wrap.appendChild(div);
     }
-  }
-
-  function renderEnvTable() {
-    const keys = ['TELEGRAM_API_ID', 'TELEGRAM_API_HASH', 'TELEGRAM_AGENT_HOME', 'LOG_LEVEL'];
-    $('env-table').innerHTML = keys.map((k) => {
-      const v = env[k];
-      const val = v == null
-        ? '<span class="env-val unset">unset</span>'
-        : '<span class="env-val">' + escapeHtml(v) + '</span>';
-      return '<div class="env-row"><span class="env-key">' + k + '</span>' + val + '</div>';
-    }).join('');
   }
 
   function labelDeliveryType(kind) {
@@ -361,8 +348,7 @@ export function renderAuthPage(
     if (deliveryHint.timeoutSec) parts.push('retry after about ' + escapeHtml(String(deliveryHint.timeoutSec)) + 's');
     if (deliveryHint.nextType) parts.push('fallback: ' + escapeHtml(labelDeliveryType(deliveryHint.nextType)));
     if (deliveryHint.type === 'telegram_app') {
-      parts.push('check your active Telegram sessions, especially the official service chat named <b>Telegram</b>');
-      parts.push('<a href="https://web.telegram.org/" target="_blank" rel="noopener">Open Telegram Web</a>');
+      parts.push('look for the official service chat named <b>Telegram</b> in another signed-in session');
     }
     showHint('delivery-hint', parts.join(' · '));
     armResendTimer(deliveryHint.timeoutSec);
@@ -371,7 +357,7 @@ export function renderAuthPage(
   function presentCodeError(error) {
     const text = String(error || 'Failed');
     if (text.includes('SEND_CODE_UNAVAILABLE')) {
-      return 'Telegram refused fallback resend for this login. Check an already-signed-in Telegram app for the service chat named Telegram, then start a fresh login attempt later if needed.';
+      return 'Telegram is allowing app delivery only for this login. Check another signed-in Telegram session, then try a fresh login later if needed.';
     }
     return text;
   }
@@ -396,7 +382,7 @@ export function renderAuthPage(
         clearInterval(resendTimer);
         resendTimer = null;
         button.disabled = false;
-        setText('resend-status', 'fallback available');
+        setText('resend-status', 'resend available');
         return;
       }
       setText('resend-status', 'retry in ' + remaining + 's');
@@ -405,7 +391,6 @@ export function renderAuthPage(
 
   function startFlow() {
     renderAccounts();
-    renderEnvTable();
     updateCredsStatus();
     if (accounts.length === 0) return show('step-phone');
     show('step-pick');
@@ -418,6 +403,7 @@ export function renderAuthPage(
       missing: 'Bundled default is active.',
     };
     $('creds-status').textContent = labels[creds.source] || '';
+    $('phone-state').textContent = creds.source === 'stored' ? 'Custom override' : creds.source === 'env' ? 'Env override' : 'Default';
   }
 
   async function pickExisting(accountId) {
@@ -457,7 +443,7 @@ export function renderAuthPage(
     const api_id = $('api_id_inline').value.trim();
     const api_hash = $('api_hash_inline').value.trim();
     if (!api_id || !api_hash) return showErr('err-creds-inline', 'Both fields required');
-    $('save-creds-inline').disabled = true;
+    setLoading('save-creds-inline', true);
     try {
       const r = await fetch('/authorize/save-credentials', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, api_id, api_hash }) });
       const body = await r.json().catch(() => ({}));
@@ -466,7 +452,7 @@ export function renderAuthPage(
       $('api_id_inline').value = '';
       $('api_hash_inline').value = '';
       updateCredsStatus();
-    } finally { $('save-creds-inline').disabled = false; }
+    } finally { setLoading('save-creds-inline', false); }
   };
 
   $('add-new').onclick = () => show('step-phone');
@@ -476,7 +462,7 @@ export function renderAuthPage(
     clearHint('delivery-hint');
     const phone = $('phone').value.trim();
     if (!phone) return showErr('err-phone', 'Phone required');
-    $('send-code').disabled = true;
+    setLoading('send-code', true, 'Sending');
     try {
       const r = await fetch('/authorize/login-start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, phone }) });
       if (!r.ok) {
@@ -488,26 +474,26 @@ export function renderAuthPage(
       $('phone-echo').textContent = phone;
       renderDeliveryHint(delivery);
       show('step-code');
-    } finally { $('send-code').disabled = false; }
+    } finally { setLoading('send-code', false, 'Send code'); }
   };
 
   $('submit-code').onclick = async () => {
     clearErr('err-code');
     const code = $('code').value.trim();
     if (!code) return showErr('err-code', 'Code required');
-    $('submit-code').disabled = true;
+    setLoading('submit-code', true, 'Checking');
     try {
       const r = await fetch('/authorize/login-code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, code }) });
       const body = await r.json();
       if (!r.ok) return showErr('err-code', presentCodeError(body.error));
       if (body.status === 'password_needed') return show('step-password');
       finish();
-    } finally { $('submit-code').disabled = false; }
+    } finally { setLoading('submit-code', false, 'Continue'); }
   };
 
   $('resend-code').onclick = async () => {
     clearErr('err-code');
-    $('resend-code').disabled = true;
+    setLoading('resend-code', true, 'Resending');
     setText('resend-status', 'requesting fallback…');
     try {
       const r = await fetch('/authorize/login-resend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID }) });
@@ -520,8 +506,12 @@ export function renderAuthPage(
       renderDeliveryHint(delivery);
       if (!delivery?.timeoutSec) setText('resend-status', 'resent');
     } finally {
-      if (!$('resend-code').disabled) return;
-      if (!delivery?.timeoutSec) $('resend-code').disabled = false;
+      if (!delivery?.timeoutSec) setLoading('resend-code', false, 'Resend');
+      else {
+        const label = $('resend-code').querySelector('.label');
+        if (label) label.textContent = 'Resend';
+        $('resend-code').classList.remove('loading');
+      }
     }
   };
 
@@ -529,13 +519,13 @@ export function renderAuthPage(
     clearErr('err-password');
     const password = $('password').value;
     if (!password) return showErr('err-password', 'Password required');
-    $('submit-password').disabled = true;
+    setLoading('submit-password', true, 'Checking');
     try {
       const r = await fetch('/authorize/login-password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, password }) });
       const body = await r.json();
       if (!r.ok) return showErr('err-password', body.error || 'Failed');
       finish();
-    } finally { $('submit-password').disabled = false; }
+    } finally { setLoading('submit-password', false, 'Continue'); }
   };
 
   function finish() {
