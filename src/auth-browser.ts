@@ -11,6 +11,7 @@ import { type AccountRecord, listAccounts, setStoredCredentials } from './state.
 import {
   clientForAccount,
   credentialsStatus,
+  type LoginCodeDeliveryHint,
   loginStart,
   loginSubmitCode,
   loginSubmitPassword,
@@ -32,6 +33,10 @@ function loadPkgMeta(): { name: string; version: string; repoUrl?: string } {
 }
 
 const pkgMeta = loadPkgMeta();
+
+function isKnownDeliveryType(value: string | undefined): value is Exclude<LoginCodeDeliveryHint['type'], undefined> {
+  return !!value;
+}
 
 /**
  * Run a one-shot login flow in the browser.
@@ -153,8 +158,8 @@ export function runBrowserLogin(opts: { timeoutMs?: number } = {}): Promise<Acco
       if (url.pathname === '/authorize/login-start') {
         if (!body.phone) return sendJson(res, 400, { error: 'phone is required' });
         try {
-          await loginStart(authId, String(body.phone));
-          return sendJson(res, 200, { ok: true });
+          const delivery = await loginStart(authId, String(body.phone));
+          return sendJson(res, 200, { ok: true, delivery });
         } catch (err) {
           return sendJson(res, 400, { error: (err as Error).message });
         }

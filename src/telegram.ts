@@ -15,13 +15,18 @@ import {
 
 export type CredentialsSource = 'env' | 'stored' | 'missing';
 
+const EMBEDDED_API_CREDENTIALS = {
+  api_id: '45139',
+  api_hash: '7e55cea996fe1d94d6d22105258e3579',
+} as const;
+
 export function credentialsStatus(): { source: CredentialsSource; api_id_masked?: string } {
   const envId = process.env.TELEGRAM_API_ID;
   const envHash = process.env.TELEGRAM_API_HASH;
   if (envId && envHash) return { source: 'env', api_id_masked: mask(envId) };
   const stored = getStoredCredentials();
   if (stored) return { source: 'stored', api_id_masked: mask(stored.api_id) };
-  return { source: 'missing' };
+  return { source: 'missing', api_id_masked: mask(EMBEDDED_API_CREDENTIALS.api_id) };
 }
 
 function mask(s: string): string {
@@ -35,9 +40,10 @@ function apiCreds(): { apiId: number; apiHash: string } {
   if (envId && envHash) return { apiId: parseInt(envId, 10), apiHash: envHash };
   const stored = getStoredCredentials();
   if (stored) return { apiId: parseInt(stored.api_id, 10), apiHash: stored.api_hash };
-  throw new Error(
-    'Telegram API credentials are not configured. Set TELEGRAM_API_ID + TELEGRAM_API_HASH in the env, or enter them during sign-in.',
-  );
+  return {
+    apiId: parseInt(EMBEDDED_API_CREDENTIALS.api_id, 10),
+    apiHash: EMBEDDED_API_CREDENTIALS.api_hash,
+  };
 }
 
 function sessionPathFor(accountId: string): string {
@@ -99,13 +105,71 @@ interface PendingLogin {
 
 const pending = new Map<string, PendingLogin>();
 
-export async function loginStart(authId: string, phone: string): Promise<void> {
+export interface LoginCodeDeliveryHint {
+  type: string;
+  nextType?: string;
+  timeoutSec?: number;
+  length?: number;
+}
+
+function normalizeSentCodeKind(value: unknown): string {
+  const raw =
+    ((value as any)?.className as string | undefined) ||
+    ((value as any)?.constructor?.name as string | undefined) ||
+    '';
+  const normalized = raw.replace(/^auth[._]/i, '').replace(/^SentCodeType/i, '').replace(/^CodeType/i, '');
+  switch (normalized.toLowerCase()) {
+    case 'app':
+      return 'telegram_app';
+    case 'sms':
+      return 'sms';
+    case 'call':
+      return 'call';
+    case 'flashcall':
+      return 'flash_call';
+    case 'missedcall':
+      return 'missed_call';
+    case 'emailcode':
+      return 'email';
+    case 'setupemailrequired':
+      return 'setup_email_required';
+    case 'fragmentsms':
+      return 'fragment_sms';
+    case 'firebasesms':
+      return 'firebase_sms';
+    case 'smsword':
+      return 'sms_word';
+    case 'smsphrase':
+      return 'sms_phrase';
+    default:
+      return normalized ? normalized.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase() : 'unknown';
+  }
+}
+
+export function normalizeSentCodeDelivery(result: {
+  type?: unknown;
+  nextType?: unknown;
+  timeout?: number;
+  isCodeViaApp?: boolean;
+}): LoginCodeDeliveryHint {
+  const hint: LoginCodeDeliveryHint = {
+    type: result.isCodeViaApp ? 'telegram_app' : normalizeSentCodeKind(result.type),
+  };
+  const length = typeof (result.type as any)?.length === 'number' ? (result.type as any).length : undefined;
+  if (length != null) hint.length = length;
+  if (typeof result.timeout === 'number') hint.timeoutSec = result.timeout;
+  if (result.nextType) hint.nextType = normalizeSentCodeKind(result.nextType);
+  return hint;
+}
+
+export async function loginStart(authId: string, phone: string): Promise<LoginCodeDeliveryHint> {
   const { apiId, apiHash } = apiCreds();
   const session = new FileSession(join(sessionsDir, `_pending_${authId}`));
   const client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 3 });
   await client.connect();
   const result = await client.sendCode({ apiId, apiHash }, phone);
   pending.set(authId, { phone, client, phoneCodeHash: result.phoneCodeHash });
+  return normalizeSentCodeDelivery(result as any);
 }
 
 export type LoginCodeResult = { status: 'ok'; account: AccountRecord } | { status: 'password_needed' };

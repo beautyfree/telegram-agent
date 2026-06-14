@@ -16,6 +16,13 @@ export interface PackageMeta {
   repoUrl?: string;
 }
 
+export interface LoginCodeDeliveryHint {
+  type: string;
+  nextType?: string;
+  timeoutSec?: number;
+  length?: number;
+}
+
 function escapeText(s: string): string {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string);
 }
@@ -90,6 +97,7 @@ export function renderAuthPage(
   .step.active { display: flex; }
   h1 { margin: 0; font-size: 16px; font-weight: 600; }
   p.lede { margin: -6px 0 2px; color: var(--muted); font-size: 13px; }
+  p.subtle { margin: -4px 0 0; color: var(--muted); font-size: 11.5px; opacity: 0.75; }
   input {
     width: 100%; padding: 10px 12px;
     background: var(--input); color: var(--fg);
@@ -113,6 +121,17 @@ export function renderAuthPage(
     display: none;
   }
   .err.show { display: block; }
+  .hint {
+    padding: 9px 10px;
+    background: rgba(42,171,238,0.12);
+    color: var(--fg);
+    border: 1px solid rgba(42,171,238,0.24);
+    border-radius: 8px;
+    font-size: 12.5px;
+    display: none;
+  }
+  .hint.show { display: block; }
+  .hint b { font-weight: 600; }
   .accounts { display: flex; flex-direction: column; gap: 6px; }
   .account {
     display: flex; justify-content: space-between; align-items: center;
@@ -160,6 +179,22 @@ export function renderAuthPage(
   .env-key { color: var(--muted); }
   .env-val { color: var(--fg); word-break: break-all; text-align: right; }
   .env-val.unset { color: var(--muted); font-style: italic; }
+  .mini-config {
+    margin-top: -2px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .mini-config summary {
+    color: var(--muted);
+    font-size: 11.5px;
+    opacity: 0.72;
+  }
+  .mini-config .lede { margin-top: 8px; }
+  .mini-config .stack { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .mini-config .row { display: flex; gap: 8px; align-items: center; }
+  .mini-config .row button { width: auto; min-width: 92px; padding: 8px 10px; font-size: 12px; }
+  .mini-config .row .status { font-size: 11.5px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -189,14 +224,29 @@ export function renderAuthPage(
     <div id="step-phone" class="step">
       <h1>Phone</h1>
       <p class="lede">Include country code.</p>
+      <p class="subtle">Using bundled API credentials by default.</p>
       <input id="phone" type="tel" autocomplete="tel" placeholder="+12025550123" />
       <button id="send-code">Send code</button>
       <div class="err" id="err-phone"></div>
+      <details class="mini-config">
+        <summary>Use different API credentials</summary>
+        <p class="lede">Optional override. Environment variables still win if they are set.</p>
+        <div class="stack">
+          <input id="api_id_inline" inputmode="numeric" placeholder="api_id" />
+          <input id="api_hash_inline" placeholder="api_hash" />
+          <div class="row">
+            <button id="save-creds-inline" class="ghost" type="button">Save override</button>
+            <span class="status" id="creds-status"></span>
+          </div>
+          <div class="err" id="err-creds-inline"></div>
+        </div>
+      </details>
     </div>
 
     <div id="step-code" class="step">
       <h1>Code</h1>
       <p class="lede">Sent to <span id="phone-echo"></span>.</p>
+      <div class="hint" id="delivery-hint"></div>
       <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345" />
       <button id="submit-code">Continue</button>
       <div class="err" id="err-code"></div>
@@ -235,6 +285,7 @@ export function renderAuthPage(
   const accounts = ${accountsJson};
   let creds = ${credsJson};
   const env = ${envJson};
+  let delivery = null;
 
   const $ = (id) => document.getElementById(id);
   const show = (id) => {
@@ -243,6 +294,8 @@ export function renderAuthPage(
   };
   const showErr = (id, msg) => { const el = $(id); el.textContent = msg; el.classList.add('show'); };
   const clearErr = (id) => { $(id).classList.remove('show'); };
+  const showHint = (id, msg) => { const el = $(id); el.innerHTML = msg; el.classList.add('show'); };
+  const clearHint = (id) => { const el = $(id); el.classList.remove('show'); el.innerHTML = ''; };
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -272,12 +325,52 @@ export function renderAuthPage(
     }).join('');
   }
 
+  function labelDeliveryType(kind) {
+    const labels = {
+      telegram_app: 'Telegram app',
+      sms: 'SMS',
+      call: 'Phone call',
+      flash_call: 'Flash call',
+      missed_call: 'Missed call',
+      email: 'Email',
+      setup_email_required: 'Email setup required',
+      fragment_sms: 'Fragment SMS',
+      firebase_sms: 'Firebase SMS',
+      sms_word: 'SMS word',
+      sms_phrase: 'SMS phrase',
+      unknown: 'unknown channel',
+    };
+    return labels[kind] || kind.replace(/_/g, ' ');
+  }
+
+  function renderDeliveryHint(deliveryHint) {
+    clearHint('delivery-hint');
+    if (!deliveryHint || !deliveryHint.type) return;
+    const parts = ['<b>Delivery:</b> ' + escapeHtml(labelDeliveryType(deliveryHint.type))];
+    if (deliveryHint.length) parts.push('code length ' + escapeHtml(String(deliveryHint.length)));
+    if (deliveryHint.timeoutSec) parts.push('retry after about ' + escapeHtml(String(deliveryHint.timeoutSec)) + 's');
+    if (deliveryHint.nextType) parts.push('fallback: ' + escapeHtml(labelDeliveryType(deliveryHint.nextType)));
+    if (deliveryHint.type === 'telegram_app') {
+      parts.push('check your active Telegram sessions, especially the official Telegram / 777000 chat');
+    }
+    showHint('delivery-hint', parts.join(' · '));
+  }
+
   function startFlow() {
     renderAccounts();
     renderEnvTable();
-    if (creds.source === 'missing') return show('step-creds');
+    updateCredsStatus();
     if (accounts.length === 0) return show('step-phone');
     show('step-pick');
+  }
+
+  function updateCredsStatus() {
+    const labels = {
+      env: 'Environment override is active.',
+      stored: 'Saved override is active.',
+      missing: 'Bundled default is active.',
+    };
+    $('creds-status').textContent = labels[creds.source] || '';
   }
 
   async function pickExisting(accountId) {
@@ -312,10 +405,28 @@ export function renderAuthPage(
     } finally { $('save-creds').disabled = false; }
   };
 
+  $('save-creds-inline').onclick = async () => {
+    clearErr('err-creds-inline');
+    const api_id = $('api_id_inline').value.trim();
+    const api_hash = $('api_hash_inline').value.trim();
+    if (!api_id || !api_hash) return showErr('err-creds-inline', 'Both fields required');
+    $('save-creds-inline').disabled = true;
+    try {
+      const r = await fetch('/authorize/save-credentials', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, api_id, api_hash }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) return showErr('err-creds-inline', body.error || 'Failed');
+      creds = { source: 'stored' };
+      $('api_id_inline').value = '';
+      $('api_hash_inline').value = '';
+      updateCredsStatus();
+    } finally { $('save-creds-inline').disabled = false; }
+  };
+
   $('add-new').onclick = () => show('step-phone');
 
   $('send-code').onclick = async () => {
     clearErr('err-phone');
+    clearHint('delivery-hint');
     const phone = $('phone').value.trim();
     if (!phone) return showErr('err-phone', 'Phone required');
     $('send-code').disabled = true;
@@ -325,7 +436,10 @@ export function renderAuthPage(
         const { error } = await r.json().catch(() => ({ error: 'Failed' }));
         return showErr('err-phone', error || 'Failed');
       }
+      const body = await r.json().catch(() => ({}));
+      delivery = body.delivery || null;
       $('phone-echo').textContent = phone;
+      renderDeliveryHint(delivery);
       show('step-code');
     } finally { $('send-code').disabled = false; }
   };
