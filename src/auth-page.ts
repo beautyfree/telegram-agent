@@ -132,6 +132,7 @@ export function renderAuthPage(
   }
   .hint.show { display: block; }
   .hint b { font-weight: 600; }
+  .hint a { color: var(--accent); }
   .accounts { display: flex; flex-direction: column; gap: 6px; }
   .account {
     display: flex; justify-content: space-between; align-items: center;
@@ -195,6 +196,9 @@ export function renderAuthPage(
   .mini-config .row { display: flex; gap: 8px; align-items: center; }
   .mini-config .row button { width: auto; min-width: 92px; padding: 8px 10px; font-size: 12px; }
   .mini-config .row .status { font-size: 11.5px; color: var(--muted); }
+  .code-actions { display: flex; gap: 8px; align-items: center; }
+  .code-actions button { width: auto; min-width: 116px; }
+  .code-status { font-size: 11.5px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -248,6 +252,10 @@ export function renderAuthPage(
       <p class="lede">Sent to <span id="phone-echo"></span>.</p>
       <div class="hint" id="delivery-hint"></div>
       <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345" />
+      <div class="code-actions">
+        <button id="resend-code" class="ghost" type="button">Resend code</button>
+        <span class="code-status" id="resend-status"></span>
+      </div>
       <button id="submit-code">Continue</button>
       <div class="err" id="err-code"></div>
     </div>
@@ -286,6 +294,7 @@ export function renderAuthPage(
   let creds = ${credsJson};
   const env = ${envJson};
   let delivery = null;
+  let resendTimer = null;
 
   const $ = (id) => document.getElementById(id);
   const show = (id) => {
@@ -296,6 +305,7 @@ export function renderAuthPage(
   const clearErr = (id) => { $(id).classList.remove('show'); };
   const showHint = (id, msg) => { const el = $(id); el.innerHTML = msg; el.classList.add('show'); };
   const clearHint = (id) => { const el = $(id); el.classList.remove('show'); el.innerHTML = ''; };
+  const setText = (id, msg) => { $(id).textContent = msg || ''; };
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -351,9 +361,46 @@ export function renderAuthPage(
     if (deliveryHint.timeoutSec) parts.push('retry after about ' + escapeHtml(String(deliveryHint.timeoutSec)) + 's');
     if (deliveryHint.nextType) parts.push('fallback: ' + escapeHtml(labelDeliveryType(deliveryHint.nextType)));
     if (deliveryHint.type === 'telegram_app') {
-      parts.push('check your active Telegram sessions, especially the official Telegram / 777000 chat');
+      parts.push('check your active Telegram sessions, especially the official service chat named <b>Telegram</b>');
+      parts.push('<a href="https://web.telegram.org/" target="_blank" rel="noopener">Open Telegram Web</a>');
     }
     showHint('delivery-hint', parts.join(' · '));
+    armResendTimer(deliveryHint.timeoutSec);
+  }
+
+  function presentCodeError(error) {
+    const text = String(error || 'Failed');
+    if (text.includes('SEND_CODE_UNAVAILABLE')) {
+      return 'Telegram refused fallback resend for this login. Check an already-signed-in Telegram app for the service chat named Telegram, then start a fresh login attempt later if needed.';
+    }
+    return text;
+  }
+
+  function armResendTimer(timeoutSec) {
+    if (resendTimer) {
+      clearInterval(resendTimer);
+      resendTimer = null;
+    }
+    const button = $('resend-code');
+    if (!timeoutSec || timeoutSec <= 0) {
+      button.disabled = false;
+      setText('resend-status', '');
+      return;
+    }
+    let remaining = timeoutSec;
+    button.disabled = true;
+    setText('resend-status', 'retry in ' + remaining + 's');
+    resendTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(resendTimer);
+        resendTimer = null;
+        button.disabled = false;
+        setText('resend-status', 'fallback available');
+        return;
+      }
+      setText('resend-status', 'retry in ' + remaining + 's');
+    }, 1000);
   }
 
   function startFlow() {
@@ -452,10 +499,30 @@ export function renderAuthPage(
     try {
       const r = await fetch('/authorize/login-code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID, code }) });
       const body = await r.json();
-      if (!r.ok) return showErr('err-code', body.error || 'Failed');
+      if (!r.ok) return showErr('err-code', presentCodeError(body.error));
       if (body.status === 'password_needed') return show('step-password');
       finish();
     } finally { $('submit-code').disabled = false; }
+  };
+
+  $('resend-code').onclick = async () => {
+    clearErr('err-code');
+    $('resend-code').disabled = true;
+    setText('resend-status', 'requesting fallback…');
+    try {
+      const r = await fetch('/authorize/login-resend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ auth_id: AUTH_ID }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setText('resend-status', '');
+        return showErr('err-code', presentCodeError(body.error));
+      }
+      delivery = body.delivery || null;
+      renderDeliveryHint(delivery);
+      if (!delivery?.timeoutSec) setText('resend-status', 'resent');
+    } finally {
+      if (!$('resend-code').disabled) return;
+      if (!delivery?.timeoutSec) $('resend-code').disabled = false;
+    }
   };
 
   $('submit-password').onclick = async () => {
