@@ -117,6 +117,7 @@ function formatRootHelp(): string {
   lines.push('stdout: JSON { ok, data } | { ok, error, code }');
   lines.push('stderr: warnings');
   lines.push('Entities: numeric ID | @username | +phone | t.me/link | "me"');
+  lines.push('Negative chat IDs: pass directly or as `-- -100... --flag ...`');
   lines.push('');
   lines.push('Global flags:');
   lines.push('  --timeout N   Timeout in seconds');
