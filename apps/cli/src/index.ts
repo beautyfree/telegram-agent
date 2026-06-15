@@ -1,6 +1,7 @@
 import { TelegramClient, TelegramError } from '@tg/protocol';
 import { Command, CommanderError } from 'commander';
 import { register as registerAction } from './commands/action';
+import { normalizeNegativePeerSeparatorArgv } from './argv';
 import { register as registerChats } from './commands/chats';
 import { register as registerDaemon } from './commands/daemon';
 import { register as registerDoctor } from './commands/doctor';
@@ -59,7 +60,11 @@ registerDaemon(program);
 registerDoctor(program);
 
 try {
-  await program.parseAsync();
+  await program.parseAsync([
+    process.argv[0] ?? 'bun',
+    process.argv[1] ?? 'telegram-agent',
+    ...normalizeNegativePeerSeparatorArgv(process.argv.slice(2)),
+  ]);
 } catch (e) {
   if (e instanceof CommanderError) {
     if (e.code === 'commander.helpDisplayed' || e.code === 'commander.version') {

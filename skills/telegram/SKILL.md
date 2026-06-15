@@ -189,6 +189,13 @@ telegram-agent listen --type user --incoming \
     done
 ```
 
+### Negative chat IDs
+```bash
+telegram-agent msg list -1001234567890 --limit 20
+# Separator form also works:
+telegram-agent msg list -- -1001234567890 --limit 20
+```
+
 ### Portable session for Docker / CI
 ```bash
 # On a machine where you've already logged in:
