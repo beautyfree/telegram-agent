@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate the release pipeline without publishing packages or creating a release
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: release-telegram-agent
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -15,16 +26,19 @@ jobs:
         include:
           - os: darwin
             arch: arm64
-            runner: macos-14
+            runner: macos-15
           - os: darwin
             arch: x64
-            runner: macos-13
+            runner: macos-15-intel
           - os: linux
             arch: x64
             runner: ubuntu-latest
           - os: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+          - os: win32
+            arch: x64
+            runner: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -47,17 +61,35 @@ jobs:
 
       - name: Build CLI for target
         env:
-          TG_TARGET_OS: ${{ matrix.os }}
-          TG_TARGET_ARCH: ${{ matrix.arch }}
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
-        run: bun --filter @tg/cli build
+        run: bun run apps/cli/scripts/build.ts --release
+
+      - name: Smoke test (Unix)
+        if: matrix.os != 'win32'
+        run: |
+          BINARY="apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}/bin/telegram-agent"
+          chmod +x "$BINARY"
+          "$BINARY" --version
+          "$BINARY" daemon start
+          "$BINARY" daemon status
+          "$BINARY" daemon stop
+
+      - name: Smoke test (Windows)
+        if: matrix.os == 'win32'
+        shell: pwsh
+        run: |
+          $binary = "apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}/bin/telegram-agent.exe"
+          & $binary --version
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: telegram-agent-${{ matrix.os }}-${{ matrix.arch }}
-          path: apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}/
+            apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}.*
+          retention-days: 7
 
   publish:
     name: Publish to npm + GitHub Release
@@ -66,6 +98,8 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -86,18 +120,84 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: apps/cli/dist
+          merge-multiple: true
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(node -p "require('./apps/cli/package.json').version")"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Publish (npm + Homebrew formula)
+        if: ${{ !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd apps/cli
           bun run scripts/publish.ts
 
+      - name: Validate npm packages (dry run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          cd apps/cli
+          bun run scripts/publish.ts --dry-run
+
+      - name: Generate checksums
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        run: |
+          cd apps/cli/dist
+          shasum -a 256 telegram-agent-*.zip telegram-agent-*.tar.gz > checksums.txt
+
       - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
             apps/cli/dist/telegram-agent-*/bin/*
+            apps/cli/dist/telegram-agent-*.zip
+            apps/cli/dist/telegram-agent-*.tar.gz
+            apps/cli/dist/checksums.txt
             apps/cli/dist/telegram-agent.rb
+
+  verify:
+    name: Verify npm install (${{ matrix.os }})
+    needs: publish
+    if: ${{ !inputs.dry_run }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+          - os: macos-15-intel
+          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install published package
+        run: npm install --global telegram-agent@${{ needs.publish.outputs.version }}
+
+      - name: Verify CLI (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          telegram-agent --version
+          telegram-agent daemon start
+          telegram-agent daemon status
+          telegram-agent daemon stop
+
+      - name: Verify CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: telegram-agent --version
