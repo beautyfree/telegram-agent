@@ -168,6 +168,7 @@ export function spawnDaemon(): void {
   const child = Bun.spawn(args, {
     stdio: ['ignore', 'ignore', 'ignore'],
     env: { ...process.env },
+    detached: true,
   });
   child.unref();
 }
