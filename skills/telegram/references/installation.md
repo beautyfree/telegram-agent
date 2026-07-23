@@ -31,7 +31,19 @@ Use `-a <client>` for a scripted install, for example `-a codex`, `-a claude-cod
 
 ## Authenticate a Telegram user account
 
-This is an MTProto/TDLib client, not the Telegram Bot API. Obtain a free API ID and hash from [my.telegram.org/apps](https://my.telegram.org/apps), then supply them to the CLI:
+This is an MTProto/TDLib client, not the Telegram Bot API. For normal use, no Telegram developer setup is required: the released `telegram-agent` binary already includes the application credentials it needs.
+
+```bash
+telegram-agent login
+telegram-agent me
+```
+
+`login` performs the Telegram phone → code → 2FA flow. The CLI keeps its TDLib session under `~/.telegram-agent/`; that directory is sensitive and should be readable only by you.
+
+<details>
+<summary><strong>Use your own Telegram application credentials (optional)</strong></summary>
+
+Use this only if you need a separate Telegram application identity for an organisation, a controlled deployment, or a custom build. Create credentials at [my.telegram.org/apps](https://my.telegram.org/apps), then provide them to the CLI:
 
 ```bash
 export TG_API_ID=123456
@@ -40,9 +52,9 @@ telegram-agent login
 telegram-agent me
 ```
 
-`login` performs the Telegram phone → code → 2FA flow. The CLI may persist the credentials and TDLib session under `~/.telegram-agent/`; that directory is sensitive and should be readable only by you.
+For repeated shell use, persist the two exports in your shell configuration only if that is appropriate for your local security model. On shared machines, provide them only for the session that needs them.
 
-For repeated shell use, persist the two exports in your shell configuration only if that is appropriate for your local security model. A safer option on shared machines is to provide the variables only for the login command/session.
+</details>
 
 ## Verify and recover
 
@@ -54,7 +66,7 @@ telegram-agent daemon stop      # Stop a stuck daemon; it restarts automatically
 telegram-agent logout           # Revoke the local Telegram session
 ```
 
-If the session is revoked, run `telegram-agent login` again. If `doctor` reports missing credentials, make sure `TG_API_ID` and `TG_API_HASH` are available to the process that starts the CLI.
+If the session is revoked, run `telegram-agent login` again. If you deliberately use your own Telegram application credentials, make sure `TG_API_ID` and `TG_API_HASH` are available to the process that starts the CLI.
 
 ## Storage and controlled portability
 
@@ -72,7 +84,7 @@ The exported blob is an account credential. Store it in a secrets manager; never
 | Symptom | What to do |
 | --- | --- |
 | `command not found` | Ensure your global npm bin directory is on `PATH`, then reinstall. |
-| Missing credentials | Set `TG_API_ID` and `TG_API_HASH`, then rerun `telegram-agent doctor`. |
+| Missing credentials | The installed binary should provide them. Reinstall the official package; only set `TG_API_ID` and `TG_API_HASH` when intentionally using your own application. |
 | Login/session failure | Run `telegram-agent logout`, then `telegram-agent login` again. |
 | Daemon is stuck | Run `telegram-agent daemon stop`; the next request starts it again. |
 | `FLOOD_WAIT` | Back off for the reported duration; do not retry bulk operations aggressively. |
