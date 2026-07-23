@@ -1,277 +1,55 @@
 <p align="center">
   <img width="20%" src="assets/logo.png" alt="telegram-agent" />
 </p>
+<h1 align="center">telegram-agent</h1>
 <p align="center">
-  <h1 align="center">telegram-agent</h1>
+  Give your AI agent Telegram access. Read, search, send, download, and organise messages from a real Telegram account.
 </p>
 <p align="center">
-  <b>The universal Telegram agent-skill</b> for Claude Code, Codex CLI, Cursor, Gemini CLI, Cline, Windsurf, OpenCode, and 40+ other AI coding agents. Lazy-loaded — <b>~0 context tokens</b> until your prompt mentions Telegram. Standalone <code>telegram-agent</code> CLI plus the universal <a href="https://code.claude.com/docs/en/skills">SKILL.md</a> bundle, one-command install via <code>npx skills</code>.
+  <a href="https://www.npmjs.com/package/telegram-agent"><img src="https://badgen.net/npm/v/telegram-agent" alt="npm version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/telegram-agent" alt="License" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node 20+" /></a>
 </p>
-<div align="center">
 
-[![npm version](https://badgen.net/npm/v/telegram-agent)](https://www.npmjs.com/package/telegram-agent)
-[![License](https://img.shields.io/npm/l/telegram-agent)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
+## Start here
 
-</div>
-
-Plugs your AI coding agent into a real Telegram user account via [MTProto](https://core.telegram.org/mtproto). The agent reads `SKILL.md` only when your prompt mentions Telegram — the rest of the time your context budget is untouched.
-
-> [!NOTE]
-> **`telegram-agent` v2+ is a fork of [avemeva/kurier](https://github.com/avemeva/kurier)** (GPL-3.0). The original CLI is `agent-telegram`; we rebranded, added Saved-Messages reaction-tags, portable session export/import, and the SKILL.md bundle for AI coding agents. See [`ATTRIBUTION.md`](./ATTRIBUTION.md) for the full diff of what we added and changed.
->
-> v1.x (≤1.0.12) lived on [gram.js](https://github.com/gram-js/gramjs) under MIT — see the `legacy-gramjs` branch / tag `v1.0.12`.
-
-**Use it to:** read dialogs · global message search · send / edit / forward / react · tag Saved Messages with reaction-tags (Premium) · moderate channels · send & download files · call raw MTProto methods. All against your real user account — no bot needed.
-
-> [!WARNING]
-> This signs in as a real Telegram user (not a bot). Sessions live in `~/.telegram-agent/`. Treat that directory like a password.
-
-## Why this exists
-
-Most ways to wire an agent into Telegram load tool definitions into the model's context on every turn — costing tokens regardless of whether you ever say "Telegram" in the conversation. `telegram-agent` takes the opposite approach: the agent only sees a short skill *description* (~50 tokens) at boot. The full instructions (~250 tokens) are loaded **only** when your prompt matches — and even then they delegate execution to the `telegram-agent` CLI binary, not in-context tools.
-
-| | Context cost (idle) | Per-task cost |
-| --- | --- | --- |
-| **This package** (skill + CLI) | **0 tokens** until matched | ~250 tokens active |
-
-Supported clients: Claude Code · Codex CLI · Cursor · Gemini CLI · Cline · Windsurf · OpenCode · Continue · Roo · Goose · 40+ more via [`npx skills`](https://github.com/vercel-labs/skills).
-
-## Prerequisites
-
-- Node.js `>=20`
-- Telegram API credentials from [my.telegram.org/apps](https://my.telegram.org/apps) — `api_id` and `api_hash`
-
-## Install
-
-One command. Drop the skill into your agent — it bootstraps the `telegram-agent` CLI, asks for your API credentials, and runs `login` itself on the first Telegram request.
+Run one command:
 
 ```bash
-npx skills add beautyfree/telegram-agent -a claude-code -g
+npx skills add beautyfree/telegram-agent -g
 ```
 
-That's it. The next time you say "check my Telegram", the agent will:
+Choose your AI app in picker. Then ask it something like:
 
-1. Run `npm i -g telegram-agent` if the binary isn't on `$PATH`.
-2. Ask you once for `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` from [my.telegram.org/apps](https://my.telegram.org/apps) and persist them in your shell rc.
-3. Run `telegram-agent login` — opens a local browser → phone → SMS code → 2FA. Session caches in `~/.telegram-agent/`.
+> Check my unread Telegram messages
 
-Prefer to do step 1–3 yourself, ahead of time? Run:
+> Summarise @hackernews from today
 
-```bash
-npm install -g telegram-agent
-export TELEGRAM_API_ID=123456
-export TELEGRAM_API_HASH=abc...
-telegram-agent login
-```
+> Find link about Cloudflare Workers in my chats
 
-### Picking the install method
+On first Telegram task, agent guides you through sign-in. No bot setup. It works with your normal Telegram account.
 
-Two ways to drop the skill in. Both end with the same `SKILL.md` in the right place on disk.
+## What it can do
 
-#### Option A — `npx skills add` (universal, 54+ agents) **[recommended]**
+- Read chats, search messages, and catch up on channels
+- Send, edit, forward, pin, delete, and react to messages
+- Download media and transcribe voice messages
+- Organise Saved Messages with reaction tags
+- Monitor conversations and moderate channels
 
-[`npx skills`](https://github.com/vercel-labs/skills) is the de-facto installer for the universal SKILL.md format. It supports 54 agent clients (`claude-code`, `codex`, `cursor`, `gemini-cli`, `cline`, `windsurf`, `opencode`, `continue`, `roo`, `goose`, `aider-desk`, `kilo`, `warp`, …).
+`telegram-agent` is a skill, not another always-on integration. Your agent loads it only for Telegram work, so it stays out of context for every other task.
 
-```bash
-npx skills add beautyfree/telegram-agent -a claude-code -g
-npx skills add beautyfree/telegram-agent -a cursor -a codex -g
-npx skills add beautyfree/telegram-agent                       # interactive picker
-```
+## Security
 
-Flags worth knowing:
+This uses your Telegram user account, not a bot. Signing in creates a local session with same access as your account. Keep its files private and review actions that send, delete, or forward messages.
 
-| Flag | Purpose |
-| --- | --- |
-| `-a, --agent <name>` | Target a specific agent (repeatable). Run `npx skills add beautyfree/telegram-agent --list` to see the full agent list. |
-| `-g, --global` | Install to `$HOME/...` instead of the current project. |
-| `-y, --yes` | Skip confirmation prompts (CI-friendly). |
-| `--copy` | Copy files instead of symlinking (symlink is the default — updates flow through). |
+## Need details?
 
-#### Option B — your agent's native command
+- [Install, sign-in, and troubleshooting](skills/telegram/references/installation.md)
+- [All CLI commands](apps/cli/README.md)
+- [Technical details, compatibility, and project history](docs/technical-details.md)
+- [Security policy](SECURITY.md)
 
-Every supported agent has a native plugin/skill install command. Use it if you prefer the standard client UX or want the agent's own update flow. Click through for the exact incantation:
+## License
 
-<details>
-<summary><b>Claude Code</b></summary>
-
-```
-/plugin marketplace add beautyfree/telegram-agent
-/plugin install telegram@telegram-agent
-/reload-plugins
-```
-
-Drops the bundle under `~/.claude/plugins/cache/`. Subsequent `/plugin update` pulls new versions.
-</details>
-
-<details>
-<summary><b>Codex CLI</b></summary>
-
-Inside Codex:
-
-```
-$skills
-$telegram
-```
-
-Or drop the bundle manually with the universal installer:
-
-```bash
-npx skills add beautyfree/telegram-agent -a codex -g
-```
-
-Codex picks up `~/.agents/skills/telegram/` on the next session.
-</details>
-
-<details>
-<summary><b>Cursor</b></summary>
-
-In Cursor:
-
-```
-/add-plugin
-```
-
-Point it at this repo (`beautyfree/telegram-agent`). The repo already contains a `.cursor-plugin/plugin.json` so Cursor installs it as a native plugin with the skill bundle wired in.
-</details>
-
-<details>
-<summary><b>Gemini CLI</b></summary>
-
-```bash
-gemini extensions install https://github.com/beautyfree/telegram-agent
-```
-
-Picks up `gemini-extension.json` from the repo and wires the skill into Gemini CLI.
-</details>
-
-<details>
-<summary><b>Cline</b></summary>
-
-```bash
-npx skills add beautyfree/telegram-agent -a cline -g
-```
-
-Drops the bundle under `~/.clinerules/telegram/`. Cline's rules engine reads it on every prompt and only follows the body when the description matches.
-</details>
-
-<details>
-<summary><b>Windsurf</b></summary>
-
-```bash
-npx skills add beautyfree/telegram-agent -a windsurf
-```
-
-Project-scoped — run inside each project where you want Telegram available. Writes `./.windsurf/rules/telegram.md` with `trigger: model_decision`.
-</details>
-
-<details>
-<summary><b>Goose</b></summary>
-
-Goose uses YAML recipes, not skill files. Wire `telegram-agent` (the binary) into a recipe's `extensions:` section if you want it inside a Goose flow.
-</details>
-
-### 3. Use it from any agent
-
-Open Claude Code / Codex / Cursor / Gemini / Cline / Windsurf and just ask:
-
-> *"summarize @hackernews from today"*
-> *"tag my Saved Messages by topic"*
-> *"send 'hello' to @friend"*
-> *"find that link about Cloudflare Workers in my chats"*
-
-The agent reads `SKILL.md`, shells out to `telegram-agent <command>`, parses JSON, responds.
-
-## CLI surface
-
-`telegram-agent` exposes the whole Telegram surface from one command. JSON to stdout — pipe through `jq`.
-
-| Group | Commands |
-| --- | --- |
-| **Sessions** | `login`, `logout`, `accounts`, `me` |
-| **Dialogs** | `dialogs`, `search-dialogs`, `resolve` |
-| **Messages (read)** | `messages`, `search`, `search-global`, `get` |
-| **Messages (write)** | `send`, `edit`, `delete`, `forward`, `pin`, `unpin`, `react`, `mark-read` |
-| **Media** | `send-file`, `download` |
-| **Saved Messages** | `saved tags`, `saved tag-rename`, `saved search`, `saved dialogs`, `saved history`, `saved delete-history`, `saved toggle-pin` |
-| **Channels** | `info`, `participants` |
-| **Raw MTProto** | `invoke <Namespace.Class> --params '{...}'` |
-
-```bash
-telegram-agent chats list --limit 10 | jq '.items[] | {title, unreadCount}'
-telegram-agent msg search "stripe pricing" --limit 20
-telegram-agent saved tags
-telegram-agent action react me 12345 🧠         # tag a Saved Message
-telegram-agent saved search --tag 🧠 --limit 50 # pull everything tagged "🧠"
-```
-
-Run `telegram-agent help` for the full flag reference.
-
-## How it works
-
-1. **Session** — `telegram-agent login` opens a tiny local browser page for phone → SMS → 2FA, then stores the session at `~/.telegram-agent/`.
-
-2. **Skill bundle** — one `SKILL.md` (frontmatter `name` + `description`, ~250 tokens) with the full command list inline, plus narrow lazy-loaded references:
-   - `references/installation.md` — install, authentication, daemon storage, troubleshooting
-   - `references/playbooks/saved-tags.md` — categorize Saved Messages with reaction-tags
-   - `references/playbooks/digest.md` — batch summary of a channel or DM
-   - `references/playbooks/moderation.md` — bans, restrictions, admin-rights bitmasks
-   - `references/playbooks/outreach.md` — careful cold/warm DM campaigns with caps + cooldowns
-
-   The agent reads `SKILL.md` only when your prompt matches its description. References load on-demand inside that activation.
-
-3. **CLI** — `telegram-agent` is a thin JSON-first wrapper around [gram.js](https://github.com/gram-js/gramjs). A background daemon (auto-spawned on first use, idle-exits after 10 min) keeps the MTProto WebSocket warm so subsequent commands take ~200 ms instead of ~2 s.
-
-4. **Distribution** — the repo follows the [universal SKILL.md layout](https://code.claude.com/docs/en/skills): `skills/telegram/SKILL.md` plus per-client marketplace manifests (`.claude-plugin/marketplace.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `gemini-extension.json`). That's what makes both `npx skills add beautyfree/telegram-agent` and the agent-native commands work out of the box.
-
-## Compatibility matrix
-
-| Agent | Recommended install | Skill format | Install target |
-| --- | --- | --- | --- |
-| Claude Code | `npx skills add … -a claude-code -g` or `/plugin marketplace add` | Universal SKILL.md | `~/.claude/skills/telegram/` |
-| Codex CLI | `npx skills add … -a codex -g` | Universal SKILL.md | `~/.agents/skills/telegram/` |
-| Cursor | `/add-plugin` (or `npx skills add … -a cursor`) | Native plugin | `~/.cursor/plugins/local/telegram/` |
-| Gemini CLI | `gemini extensions install …` | Extension | `~/.gemini/skills/telegram/` |
-| Cline | `npx skills add … -a cline -g` | Rule pack | `~/.clinerules/telegram/` |
-| Windsurf | `npx skills add … -a windsurf` (project) | Rule | `.windsurf/rules/telegram.md` |
-| OpenCode / Continue / Roo / Warp / 40+ more | `npx skills add … -a <agent> -g` | Universal SKILL.md | agent-specific |
-| Goose | wire `telegram-agent` into a YAML recipe | — | recipe `extensions:` |
-
-## Environment
-
-| Variable | Required | Default | Notes |
-| --- | --- | --- | --- |
-| `TELEGRAM_API_ID` | yes | — | From my.telegram.org/apps. Prompted on first login if unset. |
-| `TELEGRAM_API_HASH` | yes | — | Same as above. |
-| `TELEGRAM_AGENT_HOME` | no | `~/.telegram-agent` | State + session storage. |
-| `TELEGRAM_AGENT_DOWNLOADS` | no | `$TELEGRAM_AGENT_HOME/downloads` | Where `media download` saves files. |
-| `LOG_LEVEL` | no | `info` | Set to `debug` for verbose stderr. |
-
-## FAQ
-
-**Do I need Telegram Premium?**
-No. Saved Messages reaction-tags are Premium-only; everything else works on a free account.
-
-**Bot or user account?**
-User account. This is the MTProto API, not the Bot API. The agent acts as you. Treat your session like a password.
-
-**Why do I need `npm i -g telegram-agent` if I'm installing via `npx skills`?**
-`npx skills add` only drops the `SKILL.md` instructions into your agent's skill directory. The skill instructs the agent to invoke `telegram-agent` from `$PATH` — so the binary still needs to be installed. A future revision may switch the skill to invoke via `npx telegram-agent@latest` to skip this step at the cost of cold-start latency on every call.
-
-**Is my data going somewhere?**
-The session lives in `~/.telegram-agent/` on your machine. No third-party server. The CLI talks directly to Telegram's MTProto.
-
-**What about real-time push notifications?**
-Use `telegram-agent listen <chat>` — subscribes to gram.js's `NewMessage` event and writes one JSON line per new message to stdout. Pipe it into `while read line; do …; done` for a tail-style loop.
-
-**Does it work with a Telegram Bot API token?**
-No — this uses MTProto. For Bot API, you want a different package.
-
-## Related
-
-- [`npx skills`](https://github.com/vercel-labs/skills) — universal SKILL.md installer (54+ agents).
-- [Anthropic Skills docs](https://code.claude.com/docs/en/skills) — the universal SKILL.md format spec.
-- [Codex Agent Skills](https://developers.openai.com/codex/skills) — OpenAI's adoption of the same format.
-- [Cursor Plugins](https://cursor.com/docs/plugins) — Cursor's native plugin system.
-- [Gemini CLI Extensions](https://geminicli.com/docs/extensions/) — Google's extension manifest.
-- [gram.js](https://github.com/gram-js/gramjs) — the MTProto client under the hood.
+GPL-3.0. See [LICENSE](LICENSE).
