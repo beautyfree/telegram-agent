@@ -121,8 +121,8 @@ All commands accepting `<chat>` support:
 All output is JSON to stdout. Errors and warnings go to stderr. Pipe through `jq` for processing:
 
 ```bash
-telegram-agent chats list --unread | jq '.[].title'
-telegram-agent msg search "meeting" | jq '.messages[].content'
+telegram-agent chats list --unread | jq '.data.items[].title'
+telegram-agent msg search "meeting" | jq '.data.items[].content'
 ```
 
 ## Pagination
@@ -139,7 +139,7 @@ telegram-agent msg list <chat> --limit 50 --offset-id <nextOffset>
 Best suited for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Install the skill to give Claude full Telegram access:
 
 ```bash
-npx skills add avemeva/telegram-agent
+npx skills add beautyfree/telegram-agent
 ```
 
 ## License
