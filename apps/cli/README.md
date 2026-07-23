@@ -2,50 +2,15 @@
 
 Telegram CLI for AI agents. Read messages, send messages, search, download media, manage chats — all from the terminal. JSON output, designed for automation.
 
-## Installation
+## Setup
 
-### npm (all platforms)
-
-```bash
-npm i -g @avemeva/telegram-agent
-```
-
-### Bun (all platforms)
+Install the skill first with the interactive picker:
 
 ```bash
-bun i -g @avemeva/telegram-agent
+npx skills add beautyfree/telegram-agent -g
 ```
 
-### Homebrew (macOS)
-
-```bash
-brew install avemeva/tap/telegram-agent
-```
-
-### curl (macOS/Linux)
-
-```bash
-curl -fsSL https://telegram-agent.sh/install | bash
-```
-
-### PowerShell (Windows)
-
-```powershell
-irm https://telegram-agent.sh/install.ps1 | iex
-```
-
-### CMD (Windows)
-
-```cmd
-curl -fsSL https://telegram-agent.sh/install.cmd -o install.cmd && install.cmd
-```
-
-### Verify
-
-```bash
-telegram-agent --version
-telegram-agent doctor
-```
+For CLI installation, sign-in, and troubleshooting, see [the installation guide](../../skills/telegram/references/installation.md).
 
 ## Authentication
 
