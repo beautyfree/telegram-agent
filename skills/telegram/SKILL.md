@@ -88,6 +88,8 @@ telegram-agent msg list -- -1001234567890 --limit 20
 
 ## Reliable patterns
 
+For end-to-end, reviewable workflows, use the focused playbooks in [references/playbooks](references/playbooks/): digesting a chat, moderation review, careful outreach, and Saved Messages tags. Keep this file as the command and safety reference; use a playbook when the task has several stages.
+
 ### Find a person or conversation
 
 Start with actual chats and message history, not a public directory lookup:
