@@ -33,6 +33,29 @@ On the first Telegram request, the agent will guide you through connecting your 
 
 For a detailed first-time setup, including manual CLI installation and recovery, see [Install and authenticate](skills/telegram/references/installation.md).
 
+<details>
+<summary><strong>Other installation options and supported clients</strong></summary>
+
+`npx skills` is the recommended universal installer. It supports Claude Code, Codex CLI, Cursor, Gemini CLI, Cline, Windsurf, OpenCode, Continue, Roo, Goose, and more.
+
+```bash
+npx skills add beautyfree/telegram-agent -a codex -g
+npx skills add beautyfree/telegram-agent -a claude-code -a cursor -g
+npx skills add beautyfree/telegram-agent --list
+```
+
+The `-a` flag targets a client, `-g` installs globally, and `-y` makes the command non-interactive. The repository also carries native manifests for Claude Code, Cursor, and Gemini CLI; use your client’s normal extension/plugin flow if you prefer it.
+
+| Client | Recommended path |
+| --- | --- |
+| Claude Code | `npx skills add … -a claude-code -g` or the repository plugin flow |
+| Codex CLI | `npx skills add … -a codex -g` |
+| Cursor | `npx skills add … -a cursor -g` or `/add-plugin` |
+| Gemini CLI | `npx skills add … -a gemini-cli -g` or the repository extension |
+| Cline / Windsurf / OpenCode / Continue / Roo | `npx skills add … -a &lt;client&gt; -g` |
+
+</details>
+
 > [!WARNING]
 > This uses your **Telegram user account**, not a bot. A local session can read and act with your account’s permissions. Confirm sending, deleting, forwarding, and moderation actions before they run.
 
@@ -47,7 +70,36 @@ For a detailed first-time setup, including manual CLI installation and recovery,
 | Keep a channel in view | “Watch this channel and prepare a digest every hour; do not post automatically.” |
 | Work with media | “Download the last voice message and transcribe it.” |
 
-The full set of repeatable patterns — daily digests, inbox triage, Saved Message organisation, moderation, and careful outreach — lives in [Workflow recipes](docs/workflows.md).
+<details>
+<summary><strong>Workflow recipes</strong></summary>
+
+### Daily or channel digest
+
+> Summarise new posts in `@channel` since yesterday. Group them by topic, include links, and call out anything that needs a response.
+
+For a recurring workflow, fix the channel set, time window, and output format. Keep publishing separate from summarising: prepare the draft first, then decide where it goes. See the [digest playbook](skills/telegram/references/playbooks/digest.md).
+
+### Inbox triage and replies
+
+> Show my unread direct messages. For each, state who wrote, what they need, and a suggested reply. Do not send any replies.
+
+Then approve individual drafts: “Send the draft to Anna, but make it shorter.” This keeps the recipient, timing, and tone under your control.
+
+### Saved Messages as a working library
+
+> Find Saved Messages about contracts, propose a small tag system, and show me which messages would receive each tag before changing anything.
+
+After approval, reaction tags turn Saved Messages into a searchable library. See the [Saved Messages playbook](skills/telegram/references/playbooks/saved-tags.md).
+
+### Moderation and outreach
+
+Ask for a proposed action list before banning, deleting, or messaging anyone. Work in small batches and require explicit approval for each consequential action. The [moderation](skills/telegram/references/playbooks/moderation.md) and [outreach](skills/telegram/references/playbooks/outreach.md) playbooks cover limits and review points.
+
+### Automation boundary
+
+`listen` can observe new events, but an event should never silently authorise sending, deletion, or forwarding. A durable pipeline is: collect → filter and summarise → propose → approve → execute a narrow action.
+
+</details>
 
 ## How to use it well
 
@@ -60,11 +112,46 @@ The full set of repeatable patterns — daily digests, inbox triage, Saved Messa
 
 The CLI connects directly to Telegram and keeps its session on the machine that runs it. It is not a cloud inbox or a bot service. Saved Messages reaction tags and some transcription features require Telegram Premium; reading, search, and normal messaging do not.
 
+<details>
+<summary><strong>CLI surface and data model</strong></summary>
+
+All CLI commands return JSON to stdout and accept numeric IDs, `@usernames`, `t.me` links, phone numbers from contacts, or `me`/`self` for Saved Messages.
+
+| Area | Commands |
+| --- | --- |
+| Identity | `me`, `info` |
+| Chats | `chats list`, `chats search`, `chats members` |
+| Messages | `msg list`, `msg get`, `msg search` |
+| Actions | `action send`, `edit`, `delete`, `forward`, `pin`, `unpin`, `react`, `click` |
+| Media | `media download`, `transcribe`, `caption` |
+| Saved Messages | `saved tags`, `tag-rename`, `default-tags`, `search`, `history` |
+| Runtime | `listen`, `daemon`, `doctor`, `session export`, `session import`, `eval --confirm` |
+
+Run `telegram-agent --help` for flags, pagination, and individual command usage.
+
+</details>
+
+<details>
+<summary><strong>Why a skill instead of a permanent integration?</strong></summary>
+
+Telegram work is occasional for most coding sessions. The skill gives the agent Telegram-specific instructions only when the request is actually about Telegram, while the local CLI performs the operation. Outside those requests, the agent does not carry a large Telegram tool surface in its working context.
+
+</details>
+
+## Questions people ask
+
+**Is this a bot?** No. It acts through a real Telegram user account.
+
+**Does my data go through your server?** No. The local CLI talks directly to Telegram; the session stays on the machine where it runs.
+
+**Do I need Premium?** No for core messaging, reading, search, and media downloads. Reaction tags in Saved Messages and some transcription capabilities are Premium features.
+
+**Can I use it in Docker or CI?** Yes, but that is advanced setup. Read [session portability and isolated state](skills/telegram/references/installation.md#storage-and-controlled-portability) first.
+
 ## Documentation
 
 - [Install, sign in, move a session, and troubleshoot](skills/telegram/references/installation.md)
-- [Workflow recipes](docs/workflows.md)
 - [CLI command reference](apps/cli/README.md)
 - [Security model and reporting](SECURITY.md)
-- [Technical details, compatibility, and upstream attribution](docs/technical-details.md)
+- [Technical details, compatibility, and upstream attribution](docs/technical-details.md) — including why [ATTRIBUTION.md](ATTRIBUTION.md) is retained for the GPL-3.0 fork
 - [Release history](CHANGELOG.md)
