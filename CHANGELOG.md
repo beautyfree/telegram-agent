@@ -4,6 +4,21 @@ All notable changes to `telegram-agent` are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] — 2026-07-23
+
+### Changed
+- Rebuilt the CLI on TDLib as a GPL-3.0 fork of `avemeva/kurier`.
+- The npm distribution now installs a platform-specific compiled binary through
+  the `telegram-agent` wrapper package.
+- Documentation, installation commands, environment variables and command
+  examples now describe the TDLib CLI (`chats`, `msg`, `action`, `media`,
+  `saved` and `session`).
+
+### Breaking changes
+- v2 replaces the MIT/gram.js implementation from v1.x. Its runtime,
+  authentication state and distribution are incompatible with v1.x.
+- v1.x remains available from the `legacy-gramjs` branch and tag `v1.0.12`.
+
 ## [1.0.11] — 2026-05-19
 
 ### Added

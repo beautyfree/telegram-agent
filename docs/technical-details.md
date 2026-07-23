@@ -29,7 +29,9 @@ Most users should follow interactive sign-in. For custom deployments, environmen
 
 ## Release status
 
-`main` contains v2 source. npm currently serves v1.0.5 under `telegram-agent`; publish v2 platform packages and wrapper before presenting `npm install -g telegram-agent` as a v2 install path. The source contains release tooling at [`apps/cli/scripts/publish.ts`](../apps/cli/scripts/publish.ts).
+The v2 npm distribution publishes platform-specific compiled binaries and the
+`telegram-agent` wrapper package together from the release workflow. The source
+contains the release tooling at [`apps/cli/scripts/publish.ts`](../apps/cli/scripts/publish.ts).
 
 ## Project history and attribution
 

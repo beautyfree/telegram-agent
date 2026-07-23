@@ -1,7 +1,7 @@
 import { TelegramClient, TelegramError } from '@tg/protocol';
 import { Command, CommanderError } from 'commander';
-import { register as registerAction } from './commands/action';
 import { normalizeNegativePeerSeparatorArgv } from './argv';
+import { register as registerAction } from './commands/action';
 import { register as registerChats } from './commands/chats';
 import { register as registerDaemon } from './commands/daemon';
 import { register as registerDoctor } from './commands/doctor';
