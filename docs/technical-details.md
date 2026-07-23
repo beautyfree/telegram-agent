@@ -17,11 +17,9 @@ npx skills add beautyfree/telegram-agent -a codex -g
 npx skills add beautyfree/telegram-agent -a claude-code -a cursor -g
 ```
 
-## How it works
+## Architecture
 
-`telegram-agent` connects through MTProto as a Telegram user, rather than through Bot API. Installed skill activates only for Telegram requests and delegates work to `telegram-agent` CLI. CLI returns JSON, so agent can inspect results without screen scraping.
-
-Background daemon starts when needed and exits after ten minutes idle. Session data lives under `~/.telegram-agent/`; treat it like a password.
+`telegram-agent` connects through TDLib/MTProto as a Telegram user, rather than through Bot API. The installed skill gives an agent task guidance; the local CLI performs the Telegram operation and returns structured JSON. A local background daemon starts when needed and exits after ten minutes idle. Session data lives under `~/.telegram-agent/`; treat it like a password.
 
 ## Credentials and advanced setup
 
@@ -35,6 +33,6 @@ contains the release tooling at [`apps/cli/scripts/publish.ts`](../apps/cli/scri
 
 ## Project history and attribution
 
-v2 is a GPL-3.0 fork of [avemeva/kurier](https://github.com/avemeva/kurier). It adds Saved-Messages reaction tags, portable session export/import, and universal AI-agent skill distribution. Full upstream attribution and change record: [ATTRIBUTION.md](../ATTRIBUTION.md).
+v2 is a GPL-3.0 fork of [avemeva/kurier](https://github.com/avemeva/kurier). It adds Saved-Messages reaction tags, portable session export/import, and universal AI-agent skill distribution. The legally required upstream notice and a precise change record are in [ATTRIBUTION.md](../ATTRIBUTION.md).
 
 v1.x, through `v1.0.12`, used gram.js under MIT. Source remains on branch/tag `legacy-gramjs`.
