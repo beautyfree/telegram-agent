@@ -131,13 +131,6 @@ Run `telegram-agent --help` for flags, pagination, and individual command usage.
 
 </details>
 
-<details>
-<summary><strong>Why a skill instead of a permanent integration?</strong></summary>
-
-Telegram work is occasional for most coding sessions. The skill gives the agent Telegram-specific instructions only when the request is actually about Telegram, while the local CLI performs the operation. Outside those requests, the agent does not carry a large Telegram tool surface in its working context.
-
-</details>
-
 ## Questions people ask
 
 **Is this a bot?** No. It acts through a real Telegram user account.
