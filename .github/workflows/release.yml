@@ -69,6 +69,11 @@ jobs:
         if: matrix.os != 'win32'
         run: |
           BINARY="apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}/bin/telegram-agent"
+          diagnose() {
+            "$BINARY" daemon log || true
+            "$BINARY" doctor || true
+          }
+          trap diagnose ERR
           chmod +x "$BINARY"
           "$BINARY" --version
           "$BINARY" daemon start
