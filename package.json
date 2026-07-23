@@ -24,7 +24,7 @@
     "apcach": "^0.6.4",
     "typescript": "^5.7.2"
   },
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Telegram CLI for AI agents — TDLib-powered fork of avemeva/kurier with reaction-tags, session export, and skill bundle.",
   "repository": {
     "type": "git",
