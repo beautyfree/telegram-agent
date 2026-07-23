@@ -93,7 +93,7 @@ describe('session import', () => {
     // Create + export.
     const srcDb = path.join(tmpDir, 'tdlib_db');
     mkdirSync(srcDb, { recursive: true });
-    const payload = 'round-trip-payload-' + Math.random();
+    const payload = `round-trip-payload-${Math.random()}`;
     writeFileSync(path.join(srcDb, 'td.binlog'), payload);
     const exported = run(['session', 'export'], { TG_APP_DIR: tmpDir });
     const blob = (exported.json?.data as { blob: string }).blob;

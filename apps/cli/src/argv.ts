@@ -4,6 +4,10 @@ export function normalizeNegativePeerSeparatorArgv(argv: string[]): string[] {
   for (let i = 0; i < argv.length; i++) {
     const cur = argv[i];
 
+    // Indexed access is intentionally treated as optional: callers may pass a
+    // sparse array even though process.argv itself never is one.
+    if (cur === undefined) continue;
+
     if (cur === '--') {
       const next = argv[i + 1];
 
