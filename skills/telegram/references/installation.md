@@ -19,16 +19,6 @@ telegram-agent doctor
 
 If your global npm bin directory is not on `PATH`, use a Node version manager such as `nvm`, `fnm`, `asdf`, or `volta`, then reinstall. Do not use `sudo` unless it is the established policy for your machine.
 
-## Install the agent skill
-
-The skill is separate from the binary. Install it into an AI client with:
-
-```bash
-npx skills add beautyfree/telegram-agent -g
-```
-
-Use `-a <client>` for a scripted install, for example `-a codex`, `-a claude-code`, or `-a cursor`. The skill will look for `telegram-agent` on `PATH` when a Telegram task arrives.
-
 ## Authenticate a Telegram user account
 
 This is an MTProto/TDLib client, not the Telegram Bot API. For normal use, no Telegram developer setup is required: the released `telegram-agent` binary already includes the application credentials it needs.
