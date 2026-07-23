@@ -35,7 +35,9 @@ export function register(parent: Command): void {
         process.kill(pid, 'SIGTERM');
         success({ stopped: true, pid });
       } else {
-        fail('Daemon not running', 'NOT_FOUND');
+        // `stop` is intentionally idempotent: a daemon that has already
+        // exited has reached the requested state.
+        success({ stopped: false, already_stopped: true });
       }
       process.exit(0);
     });
