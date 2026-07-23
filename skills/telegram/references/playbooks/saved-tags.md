@@ -1,101 +1,43 @@
-# Saved Messages — reaction tags (Premium)
+# Saved Messages reaction tags
 
-Telegram Premium lets you put a reaction on a Saved Message; that reaction becomes a *tag*. Tagged messages are filterable by tag and tags can be renamed (so 🧠 can mean "AI", 📚 = "Books", etc).
+Telegram Premium lets reactions on Saved Messages act as tags. Use them to create a personal, searchable library.
 
-## Concept
-
-- The peer is always `me` (your own user).
-- Each Saved Message can carry one or more reactions.
-- A reaction acts as a tag. Tag rename = give that emoji a custom display title.
-- Filtering by tag = `messages.Search` with `savedReaction` set.
-
-Without Premium: you can still read Saved Messages, but reactions on `me` won't persist as tags and `saved search --tag` will return empty.
-
-## Workflow — categorize an inbox
-
-Goal: take the last N unread Saved Messages, classify each by topic, apply a tag, surface a per-tag count.
-
-### 1. Read current tag scheme
+## Start with a small scheme
 
 ```bash
 telegram-agent saved tags
-```
-
-Returns server-stored tags with `count` and `title`. If empty, you're starting fresh. Optionally seed names:
-
-```bash
-telegram-agent saved tag-rename 🧠 "AI"
-telegram-agent saved tag-rename 📚 "Books"
+telegram-agent saved tag-rename 🧠 "Ideas"
+telegram-agent saved tag-rename 📚 "Reading"
 telegram-agent saved tag-rename 💼 "Work"
-telegram-agent saved tag-rename 🍳 "Recipes"
-telegram-agent saved tag-rename 🔧 "Tools"
-telegram-agent saved tag-rename 🎬 "Watch later"
 ```
 
-### 2. Pull a batch
+`saved tags` returns tags in `.data.tags`. Keep the scheme small and explain a new tag before applying it broadly.
+
+## Classify a reviewable batch
 
 ```bash
-telegram-agent msg list me --limit 100 | jq '.items[] | {id, date, text, mediaType}'
+telegram-agent msg list me --limit 50 | jq '.data.items[] | {id, date, text}'
 ```
 
-### 3. Classify and tag
-
-For each message, decide an emoji from the scheme (or invent a new one and rename it later). Then:
+Propose the mapping first, then apply approved tags:
 
 ```bash
-telegram-agent action react me <messageId> <emoji>
+telegram-agent action react me 12345 🧠
+telegram-agent action react me 12346 📚
 ```
 
-Batch a list with a shell loop:
+## Retrieve later
 
 ```bash
-while read id emoji; do telegram-agent action react me "$id" "$emoji"; done <<EOF
-12345 🧠
-12346 📚
-12347 🍳
-EOF
+telegram-agent saved search --tag 🧠 --limit 50
+telegram-agent saved search --tag 📚 --query "Rust"
+telegram-agent saved history --limit 50
 ```
 
-### 4. Verify per-tag pulls
+Tag search uses one `--tag` or `--tag-custom` filter at a time. If Premium features are unavailable, keep using Saved Messages normally and do not promise that tags will work.
 
-```bash
-telegram-agent saved search --tag 🧠 --limit 20
-telegram-agent saved search --tag 📚 --query "rust"   # text + tag
-```
+## Guardrails
 
-### 5. Get counts
-
-```bash
-telegram-agent saved tags | jq '.tags[] | {emoji: .reaction.emoticon, count, title}'
-```
-
-## Multi-tag search
-
-```bash
-telegram-agent saved search --tag 🧠 --tag 📚 --limit 50
-```
-
-Returns messages tagged with either tag (OR semantics on the server side as of MTProto layer 178+).
-
-## Clearing tags
-
-Remove all reactions on a message = `react` with no emoji:
-
-```bash
-telegram-agent action react me <messageId>
-```
-
-Clear a tag's custom title (revert to bare emoji):
-
-```bash
-telegram-agent saved tag-rename 🧠
-```
-
-## Saved sub-dialogs (forum mode)
-
-Telegram now groups Saved Messages into sub-dialogs by original sender. `telegram-agent saved dialogs` lists them; `telegram-agent saved history <origin-peer>` reads one. Useful for "show me everything I forwarded from @hackernews".
-
-## Don't
-
-- Don't react on messages that aren't yours in `me` — they get forwarded sender's avatar but the reaction is still local-to-you. Should be safe but unusual.
-- Don't `saved delete-history` without explicit user confirmation. Irreversible.
+- Reactions are an organisational change; show the proposed mapping before a large batch.
+- Do not use `eval` or undocumented Telegram operations to bulk-edit Saved Messages.
+- Treat a session export as a credential, not as a backup to paste into a chat.

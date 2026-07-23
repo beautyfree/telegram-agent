@@ -9,7 +9,14 @@ export function register(parent: Command): void {
     .description('Execute JavaScript with a connected TDLib client')
     .argument('[code...]', 'JavaScript code to execute')
     .option('--file <path>', 'Read code from a file path')
-    .action((codeArgs: string[], opts: { file?: string }) => {
+    .option('--confirm', 'Confirm execution of arbitrary JavaScript')
+    .action((codeArgs: string[], opts: { file?: string; confirm?: boolean }) => {
+      if (!opts.confirm) {
+        fail(
+          '`eval` executes arbitrary JavaScript. Re-run with --confirm after review.',
+          'PERMISSION',
+        );
+      }
       pending.action = async (client) => {
         let code: string;
         if (opts.file) {

@@ -17,7 +17,7 @@ Format:
 ```
 # <Short title>
 
-**Commands used**: dialogs, messages, search, ...
+**Commands used**: chats list, msg search, action send, ...
 
 ## Issues
 - (bug or unexpected behavior — include exact command + error JSON)

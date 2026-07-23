@@ -103,7 +103,7 @@ telegram-agent logout                          # Log out of Telegram
 ### Advanced
 
 ```bash
-telegram-agent eval '<javascript>'             # Run JS with connected TDLib client
+telegram-agent eval --confirm '<javascript>'   # Run reviewed JS with connected TDLib client
 telegram-agent doctor                          # Verify installation health
 ```
 
