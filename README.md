@@ -77,7 +77,7 @@ The `-a` flag targets a client, `-g` installs globally, and `-y` makes the comma
 
 > Summarise new posts in `@channel` since yesterday. Group them by topic, include links, and call out anything that needs a response.
 
-For a recurring workflow, fix the channel set, time window, and output format. Keep publishing separate from summarising: prepare the draft first, then decide where it goes. See the [digest playbook](skills/telegram/references/playbooks/digest.md).
+For a recurring workflow, fix the channel set, time window, and output format. Keep publishing separate from summarising: prepare the draft first, then decide where it goes.
 
 ### Inbox triage and replies
 
@@ -89,11 +89,11 @@ Then approve individual drafts: â€œSend the draft to Anna, but make it shorter.â
 
 > Find Saved Messages about contracts, propose a small tag system, and show me which messages would receive each tag before changing anything.
 
-After approval, reaction tags turn Saved Messages into a searchable library. See the [Saved Messages playbook](skills/telegram/references/playbooks/saved-tags.md).
+After approval, reaction tags turn Saved Messages into a searchable library.
 
 ### Moderation and outreach
 
-Ask for a proposed action list before banning, deleting, or messaging anyone. Work in small batches and require explicit approval for each consequential action. The [moderation](skills/telegram/references/playbooks/moderation.md) and [outreach](skills/telegram/references/playbooks/outreach.md) playbooks cover limits and review points.
+Ask for a proposed action list before banning, deleting, or messaging anyone. Work in small batches and require explicit approval for each consequential action.
 
 ### Automation boundary
 
