@@ -49,6 +49,8 @@ jobs:
         env:
           TG_TARGET_OS: ${{ matrix.os }}
           TG_TARGET_ARCH: ${{ matrix.arch }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: bun --filter @tg/cli build
 
       - name: Upload artifact
