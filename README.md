@@ -7,6 +7,7 @@
 </p>
 <p align="center">
   <a href="https://www.npmjs.com/package/telegram-agent"><img src="https://badgen.net/npm/v/telegram-agent" alt="npm version" /></a>
+  <a href="https://skills.sh/beautyfree/telegram-agent"><img src="https://skills.sh/b/beautyfree/telegram-agent" alt="skills.sh installs" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/telegram-agent" alt="License" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node 20+" /></a>
 </p>
