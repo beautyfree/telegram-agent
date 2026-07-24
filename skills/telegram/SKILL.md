@@ -1,6 +1,11 @@
 ---
 name: telegram
 description: Telegram CLI for AI agents. Use when the user needs to read or search Telegram, send or edit a message, download media, organise Saved Messages, monitor conversations, or automate a Telegram task. Triggers on “check my messages”, “send a message”, “search Telegram”, “read unread”, “listen to chat”, “download from Telegram”, тэг сохранёнок, чаты, каналы, and @peer names.
+tags:
+  - telegram
+  - messaging
+  - automation
+  - productivity
 allowed-tools: Bash(telegram-agent:*)
 ---
 
@@ -10,7 +15,9 @@ Use `telegram-agent` to work with the user’s real Telegram account. Output is 
 
 ## Setup
 
-If `telegram-agent` is unavailable, read [references/installation.md](references/installation.md). Otherwise verify the connection:
+If `telegram-agent` is unavailable, install it with `npm install -g telegram-agent`, then run `telegram-agent --version`. Read [references/installation.md](references/installation.md) only if installation fails or the user needs advanced setup. Do not ask the user to install the CLI manually.
+
+Otherwise verify the connection:
 
 ```bash
 telegram-agent me
