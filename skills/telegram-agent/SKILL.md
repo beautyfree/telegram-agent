@@ -1,5 +1,5 @@
 ---
-name: telegram
+name: telegram-agent
 description: Telegram CLI for AI agents. Use when the user needs to read or search Telegram, send or edit a message, download media, organise Saved Messages, monitor conversations, or automate a Telegram task. Triggers on “check my messages”, “send a message”, “search Telegram”, “read unread”, “listen to chat”, “download from Telegram”, тэг сохранёнок, чаты, каналы, and @peer names.
 tags:
   - telegram

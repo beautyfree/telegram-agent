@@ -9,10 +9,10 @@
   },
   "plugins": [
     {
-      "name": "telegram",
+      "name": "telegram-agent",
       "source": "./",
       "description": "Telegram agent skill — operate a real Telegram user account via the telegram-agent CLI. Reads dialogs, searches messages, sends/edits/forwards, tags Saved Messages, moderates channels. Triggers on mentions of Telegram, чаты, каналы, Saved Messages, or @channel-style peer names.",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "communication",
       "tags": ["telegram", "messaging", "communication", "saved-messages", "skill"],
       "homepage": "https://github.com/beautyfree/telegram-agent",

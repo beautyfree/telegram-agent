@@ -1,6 +1,0 @@
-interface:
-  display_name: "Telegram"
-  short_description: "Operate a real Telegram user account via the telegram-agent CLI."
-
-policy:
-  allow_implicit_invocation: true

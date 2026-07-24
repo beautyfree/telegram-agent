@@ -1,0 +1,4 @@
+interface:
+  display_name: "Telegram Agent"
+  short_description: "Work safely with a real Telegram account"
+  default_prompt: "Use $telegram-agent to catch me up on my unread Telegram messages."

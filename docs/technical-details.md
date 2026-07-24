@@ -7,14 +7,14 @@ This page is for maintainers and users who need setup, compatibility, or impleme
 Install through the interactive picker:
 
 ```bash
-npx skills add beautyfree/telegram-agent -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -g
 ```
 
 `npx skills` selects supported installed agents. It supports Claude Code, Codex CLI, Cursor, Gemini CLI, Cline, Windsurf, OpenCode, Continue, Roo, Goose, and more. Use its flags only when you need a scripted or non-interactive install:
 
 ```bash
-npx skills add beautyfree/telegram-agent -a codex -g
-npx skills add beautyfree/telegram-agent -a claude-code -a cursor -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -a codex -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -a claude-code -a cursor -g
 ```
 
 ## Architecture
@@ -23,7 +23,7 @@ npx skills add beautyfree/telegram-agent -a claude-code -a cursor -g
 
 ## Credentials and advanced setup
 
-Most users should follow interactive sign-in. For custom deployments, environment configuration, multiple accounts, session portability, or troubleshooting, see [installation reference](../skills/telegram/references/installation.md).
+Most users should follow interactive sign-in. For custom deployments, environment configuration, multiple accounts, session portability, or troubleshooting, see [installation reference](../skills/telegram-agent/references/installation.md).
 
 ## Release status
 
