@@ -17,7 +17,7 @@
 ## Install and use
 
 ```bash
-npx skills add beautyfree/telegram-agent -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -g
 ```
 
 Choose your AI client in the picker. Then use normal language:
@@ -32,7 +32,7 @@ Choose your AI client in the picker. Then use normal language:
 
 On the first Telegram request, the agent will guide you through connecting your account. You authenticate with your phone, the Telegram/SMS code, and 2FA if enabled. No bot token and no hosted relay are involved.
 
-For a detailed first-time setup, including manual CLI installation and recovery, see [Install and authenticate](skills/telegram/references/installation.md).
+For a detailed first-time setup, including manual CLI installation and recovery, see [Install and authenticate](skills/telegram-agent/references/installation.md).
 
 <details>
 <summary><strong>Other installation options and supported clients</strong></summary>
@@ -40,8 +40,8 @@ For a detailed first-time setup, including manual CLI installation and recovery,
 `npx skills` is the recommended universal installer. It supports Claude Code, Codex CLI, Cursor, Gemini CLI, Cline, Windsurf, OpenCode, Continue, Roo, Goose, and more.
 
 ```bash
-npx skills add beautyfree/telegram-agent -a codex -g
-npx skills add beautyfree/telegram-agent -a claude-code -a cursor -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -a codex -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -a claude-code -a cursor -g
 npx skills add beautyfree/telegram-agent --list
 ```
 
@@ -140,11 +140,11 @@ Run `telegram-agent --help` for flags, pagination, and individual command usage.
 
 **Do I need Premium?** No for core messaging, reading, search, and media downloads. Reaction tags in Saved Messages and some transcription capabilities are Premium features.
 
-**Can I use it in Docker or CI?** Yes, but that is advanced setup. Read [session portability and isolated state](skills/telegram/references/installation.md#storage-and-controlled-portability) first.
+**Can I use it in Docker or CI?** Yes, but that is advanced setup. Read [session portability and isolated state](skills/telegram-agent/references/installation.md#storage-and-controlled-portability) first.
 
 ## Documentation
 
-- [Install, sign in, move a session, and troubleshoot](skills/telegram/references/installation.md)
+- [Install, sign in, move a session, and troubleshoot](skills/telegram-agent/references/installation.md)
 - [CLI command reference](apps/cli/README.md)
 - [Security model and reporting](SECURITY.md)
 - [Technical details, compatibility, and upstream attribution](docs/technical-details.md) — including why [ATTRIBUTION.md](ATTRIBUTION.md) is retained for the GPL-3.0 fork

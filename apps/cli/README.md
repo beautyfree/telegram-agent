@@ -7,10 +7,10 @@ Telegram CLI for AI agents. Read messages, send messages, search, download media
 Install the skill first with the interactive picker:
 
 ```bash
-npx skills add beautyfree/telegram-agent -g
+npx skills add beautyfree/telegram-agent --skill telegram-agent -g
 ```
 
-For CLI installation, sign-in, and troubleshooting, see [the installation guide](../../skills/telegram/references/installation.md).
+For CLI installation, sign-in, and troubleshooting, see [the installation guide](../../skills/telegram-agent/references/installation.md).
 
 ## Authentication
 
@@ -139,7 +139,7 @@ telegram-agent msg list <chat> --limit 50 --offset-id <nextOffset>
 Best suited for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Install the skill to give Claude full Telegram access:
 
 ```bash
-npx skills add beautyfree/telegram-agent
+npx skills add beautyfree/telegram-agent --skill telegram-agent
 ```
 
 ## License

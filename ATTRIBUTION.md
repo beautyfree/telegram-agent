@@ -16,13 +16,13 @@
 - Added `session export` / `session import` for portable session strings (Telethon-compatible serialization).
 - Added directory + file permission hardening (`chmod 700` on the state dir, `chmod 600` on persisted secrets).
 - Added a [`SECURITY.md`](./SECURITY.md) threat model + reporting flow.
-- Repackaged distribution for our `npm` namespace with the universal SKILL.md bundle (`skills/telegram/`) for AI coding agents.
+- Repackaged distribution for our `npm` namespace with the universal SKILL.md bundle (`skills/telegram-agent/`) for AI coding agents.
 
 ## License
 
 Because this is a derivative work of GPL-3.0 code, `telegram-agent` is itself GPL-3.0-only. See [`LICENSE`](./LICENSE) for the full text.
 
-If you only need the **skill bundle** (the SKILL.md + references in `skills/telegram/`) without the CLI source, the skill files themselves are GPL-3.0 because they're distributed in this repo; clean-room equivalents that drive any Telegram CLI under any license are welcome.
+If you only need the **skill bundle** (the SKILL.md + references in `skills/telegram-agent/`) without the CLI source, the skill files themselves are GPL-3.0 because they're distributed in this repo; clean-room equivalents that drive any Telegram CLI under any license are welcome.
 
 ## Pre-2.0 history
 
