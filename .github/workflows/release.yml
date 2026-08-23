@@ -193,39 +193,36 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
-      # npm's CDN can take a short time to serve every optional platform package.
-      - name: Install published package (Unix)
+      # npm can publish the wrapper before a platform package becomes available.
+      # Retry a clean install and actual CLI invocation together so optional
+      # dependencies are re-resolved after the package finishes processing.
+      - name: Install and verify published package (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          for attempt in 1 2 3 4 5; do
-            npm install --global telegram-agent@${{ needs.publish.outputs.version }} && exit 0
-            if [[ "$attempt" == "5" ]]; then
-              exit 1
-            fi
+          for attempt in $(seq 1 12); do
+            npm uninstall --global telegram-agent || true
+            npm cache clean --force
+            npm install --global telegram-agent@${{ needs.publish.outputs.version }} && telegram-agent --version && break
+            if [[ "$attempt" == "12" ]]; then exit 1; fi
             sleep 15
           done
-
-      - name: Install published package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          for ($attempt = 1; $attempt -le 5; $attempt++) {
-            npm install --global telegram-agent@${{ needs.publish.outputs.version }}
-            if ($LASTEXITCODE -eq 0) { exit 0 }
-            if ($attempt -eq 5) { exit $LASTEXITCODE }
-            Start-Sleep -Seconds 15
-          }
-
-      - name: Verify CLI (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          telegram-agent --version
           telegram-agent daemon start
           telegram-agent daemon status
           telegram-agent daemon stop
 
-      - name: Verify CLI (Windows)
+      - name: Install and verify published package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: telegram-agent --version
+        run: |
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+            npm uninstall --global telegram-agent 2>$null
+            npm cache clean --force
+            npm install --global telegram-agent@${{ needs.publish.outputs.version }}
+            if ($LASTEXITCODE -eq 0) {
+              telegram-agent --version
+              if ($LASTEXITCODE -eq 0) { exit 0 }
+            }
+            if ($attempt -eq 12) { exit 1 }
+            Start-Sleep -Seconds 15
+          }
