@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { Command } from 'commander';
-import { ensureDaemon, getDaemonPid, LOG_FILE, spawnDaemon } from '../daemon';
+import { ensureDaemon, getDaemonPid, LOG_FILE } from '../daemon';
 import { fail, success } from '../output';
 
 export function register(parent: Command): void {
@@ -14,7 +14,6 @@ export function register(parent: Command): void {
       if (existingPid) {
         success({ already_running: true, pid: existingPid });
       } else {
-        spawnDaemon();
         const { url } = await ensureDaemon();
         const pid = getDaemonPid();
         if (url && pid) {
