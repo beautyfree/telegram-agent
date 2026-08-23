@@ -4,7 +4,7 @@ import { enrichMembers, enrichUserProfile, type UserProfile } from '../enrich';
 import { flattenChats, flattenFindResult } from '../flatten';
 import { fail, strip, success } from '../output';
 import { pending } from '../pending';
-import { resolveChatId } from '../resolve';
+import { resolveChatId, resolveEntity } from '../resolve';
 import { slimMembers } from '../slim';
 import {
   getChatType,
@@ -441,6 +441,87 @@ export function register(parent: Command): void {
         } else {
           fail('Chat is not a group or channel', 'INVALID_ARGS');
         }
+      };
+    });
+
+  chats
+    .command('add-bot')
+    .description('Add a bot to a broadcast channel with posting permission only')
+    .argument('<channel>', 'Channel ID, username, or link')
+    .argument('<bot>', 'Bot username or user ID')
+    .option('--confirm', 'Confirm adding the bot as a channel administrator')
+    .action((channelArg: string, botArg: string, opts: { confirm?: boolean }) => {
+      if (!opts.confirm) {
+        fail(
+          'Adding a bot changes channel membership and administrator access. Re-run with --confirm after review.',
+          'PERMISSION',
+        );
+      }
+
+      pending.action = async (client) => {
+        const chatId = await resolveChatId(client, channelArg);
+        const chat = await client.invoke({ _: 'getChat', chat_id: chatId });
+        if (chat.type._ !== 'chatTypeSupergroup' || !chat.type.is_channel) {
+          fail('Bots can only be added by this command to broadcast channels', 'INVALID_ARGS');
+        }
+
+        const botId = await resolveEntity(client, botArg);
+        const bot = await client.invoke({ _: 'getUser', user_id: botId });
+        if (bot.type._ !== 'userTypeBot') {
+          fail('The supplied member is not a bot', 'INVALID_ARGS');
+        }
+        if (!bot.type.can_join_groups) {
+          fail('This bot does not allow itself to be added to groups or channels', 'PERMISSION');
+        }
+
+        await client.invoke({
+          _: 'setChatMemberStatus',
+          chat_id: chatId,
+          member_id: { _: 'messageSenderUser', user_id: botId },
+          status: {
+            _: 'chatMemberStatusAdministrator',
+            can_be_edited: false,
+            custom_title: '',
+            rights: {
+              _: 'chatAdministratorRights',
+              can_manage_chat: false,
+              can_change_info: false,
+              can_post_messages: true,
+              can_edit_messages: false,
+              can_delete_messages: false,
+              can_invite_users: false,
+              can_restrict_members: false,
+              can_pin_messages: false,
+              can_manage_topics: false,
+              can_promote_members: false,
+              can_manage_video_chats: false,
+              can_post_stories: false,
+              can_edit_stories: false,
+              can_delete_stories: false,
+              can_manage_direct_messages: false,
+              is_anonymous: false,
+            },
+          },
+        } satisfies Td.setChatMemberStatus);
+
+        const member = await client.invoke({
+          _: 'getChatMember',
+          chat_id: chatId,
+          member_id: { _: 'messageSenderUser', user_id: botId },
+        });
+        if (
+          member.status._ !== 'chatMemberStatusAdministrator' ||
+          !member.status.rights.can_post_messages
+        ) {
+          fail('Telegram did not grant the bot the required posting permission', 'PERMISSION');
+        }
+
+        success({
+          channel_id: chatId,
+          bot: { id: bot.id, username: bot.usernames?.active_usernames?.[0] },
+          status: 'administrator',
+          permissions: ['post_messages'],
+        });
       };
     });
 }
