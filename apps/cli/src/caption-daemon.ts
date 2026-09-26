@@ -6,16 +6,16 @@
  * PID/port written to APP_DIR for client-side lifecycle management.
  */
 
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { APP_DIR } from '@tg/protocol/paths';
+import {
+  ensurePrivateDirectory,
+  getDaemonToken,
+  PROTOCOL_HEADER,
+  PROTOCOL_VERSION,
+  serveLocal,
+} from '@tg/protocol/security';
 
 const MODEL_ID = 'onnx-community/Florence-2-base';
 const MODELS_DIR = path.join(APP_DIR, 'models');
@@ -53,7 +53,8 @@ function captionLog(msg: string): void {
 // ---------------------------------------------------------------------------
 
 export async function runCaptionDaemon(): Promise<void> {
-  mkdirSync(APP_DIR, { recursive: true });
+  ensurePrivateDirectory(APP_DIR);
+  const authToken = getDaemonToken();
 
   // Check for existing daemon
   if (existsSync(PID_FILE)) {
@@ -133,6 +134,10 @@ export async function runCaptionDaemon(): Promise<void> {
   function resetIdle(): void {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
+      if (activeRequests > 0) {
+        resetIdle();
+        return;
+      }
       captionLog('Idle timeout reached, shutting down');
       shutdown();
     }, IDLE_TIMEOUT_MS);
@@ -144,17 +149,22 @@ export async function runCaptionDaemon(): Promise<void> {
   // HTTP server
   // ---------------------------------------------------------------------------
 
-  Bun.serve({
+  let activeRequests = 0;
+  serveLocal({
+    authToken,
     port,
     fetch: async (req) => {
       const url = new URL(req.url);
 
       if (url.pathname === '/health') {
-        resetIdle();
-        return Response.json({ ok: true, model: MODEL_ID, dtype: DTYPE, device, pid: process.pid });
+        return Response.json(
+          { ok: true, model: MODEL_ID, dtype: DTYPE, device, pid: process.pid },
+          { headers: { [PROTOCOL_HEADER]: PROTOCOL_VERSION, 'Cache-Control': 'no-store' } },
+        );
       }
 
       if (url.pathname === '/caption' && req.method === 'POST') {
+        activeRequests++;
         resetIdle();
         try {
           const body = (await req.json()) as { files: string[]; maxTokens?: number };
@@ -187,6 +197,9 @@ export async function runCaptionDaemon(): Promise<void> {
           const msg = e instanceof Error ? e.message : String(e);
           captionLog(`Caption error: ${msg}`);
           return Response.json({ error: msg }, { status: 500 });
+        } finally {
+          activeRequests--;
+          resetIdle();
         }
       }
 
