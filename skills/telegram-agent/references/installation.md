@@ -46,6 +46,28 @@ For repeated shell use, persist the two exports in your shell configuration only
 
 </details>
 
+## Multiple accounts
+
+```bash
+telegram-agent accounts add work
+telegram-agent accounts add personal
+telegram-agent accounts list
+telegram-agent --account work me
+telegram-agent accounts use work
+```
+
+The original session remains `default`. `accounts add` creates and logs in a named
+profile without switching the saved default. Use `--no-login` to defer login or
+import a session. Select explicitly with `--account NAME` or `TG_ACCOUNT=NAME`;
+these override the saved default, in that order. Every command supports account
+selection, including login, logout, streaming, media, and session portability.
+For automated actions, always specify the intended account.
+
+Each profile has independent state and local services; multiple accounts can run
+at once. Changing the default affects future commands only. See the
+[full account command reference](../../../apps/cli/README.md#multiple-accounts)
+for status, renaming, removal and credential resolution.
+
 ## Verify and recover
 
 ```bash
@@ -60,12 +82,14 @@ If the session is revoked, run `telegram-agent login` again. If you deliberately
 
 ## Storage and controlled portability
 
-The default state directory is `~/.telegram-agent/`. Override it with `TG_APP_DIR=/path/to/state` when isolating accounts, using a container, or running CI.
+The default state directory is `~/.telegram-agent/`. Override it with `TG_APP_DIR=/path/to/state` when using a container or running CI. Named accounts live under `accounts/NAME/` within that root, while the original `default` account retains the root directory.
 
 ```bash
 telegram-agent session export | jq -r '.data.blob' > session.b64
 telegram-agent session import --string "$(cat session.b64)" --force
 ```
+
+Use `--account NAME` on both commands to choose the profile. Export/import stops only that profile’s Telegram daemon; it restarts on the next request. Import validates the archive before replacing the database and cannot write into other profiles.
 
 The exported blob is an account credential. Store it in a secrets manager; never commit it, include it in logs, or send it through Telegram.
 

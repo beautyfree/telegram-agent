@@ -1,3 +1,4 @@
+import { ACCOUNT_NAME } from '@tg/protocol/paths';
 import type { Command } from 'commander';
 import type * as Td from 'tdlib-types';
 import { enrichMessage } from '../enrich';
@@ -42,7 +43,7 @@ export function register(parent: Command): void {
 
         const emit = (event: Record<string, unknown>) => {
           if (!eventFilter.has(event.type as string)) return;
-          process.stdout.write(`${JSON.stringify(event)}\n`);
+          process.stdout.write(`${JSON.stringify({ ...event, account: ACCOUNT_NAME })}\n`);
         };
 
         const typeFilter = opts.type as string | undefined;

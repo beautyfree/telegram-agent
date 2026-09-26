@@ -60,6 +60,22 @@ The `-a` flag targets a client, `-g` installs globally, and `-y` makes the comma
 > [!WARNING]
 > This uses your **Telegram user account**, not a bot. A local session can read and act with your account’s permissions. Confirm sending, deleting, forwarding, and moderation actions before they run.
 
+## Multiple accounts
+
+Keep your current session as `default`, and add other accounts by name:
+
+```bash
+telegram-agent accounts add work        # Sign in with the second account
+telegram-agent accounts list
+telegram-agent --account work me
+telegram-agent accounts use work        # Default for future commands
+telegram-agent --account default me     # Your original session
+```
+
+Accounts have separate sessions, media caches, tokens, and background services.
+Use `--account NAME` in scripts to keep actions tied to the intended account.
+See [account management](apps/cli/README.md#multiple-accounts) for the full lifecycle.
+
 ## What it is good at
 
 | Need | What to ask your agent |
@@ -120,6 +136,7 @@ All CLI commands return JSON to stdout and accept numeric IDs, `@usernames`, `t.
 
 | Area | Commands |
 | --- | --- |
+| Accounts | `accounts add`, `list`, `current`, `use`, `status`, `login`, `rename`, `remove` |
 | Identity | `me`, `info` |
 | Chats | `chats list`, `chats search`, `chats members` |
 | Messages | `msg list`, `msg get`, `msg search` |

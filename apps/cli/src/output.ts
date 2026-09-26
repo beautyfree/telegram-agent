@@ -1,3 +1,4 @@
+import { ACCOUNT_NAME } from '@tg/protocol/paths';
 /**
  * Output formatting for the CLI.
  *
@@ -83,7 +84,7 @@ export const bigIntReplacer = (_key: string, value: unknown): unknown =>
 
 /** Write successful result to stdout. */
 export function success(data: unknown, meta?: PaginationMeta): void {
-  const result: Record<string, unknown> = { ok: true, data };
+  const result: Record<string, unknown> = { ok: true, account: ACCOUNT_NAME, data };
   if (meta) {
     if (meta.hasMore !== undefined) result.hasMore = meta.hasMore;
     if (meta.nextOffset !== undefined) result.nextOffset = meta.nextOffset;
@@ -93,7 +94,9 @@ export function success(data: unknown, meta?: PaginationMeta): void {
 
 /** Write error to stdout and exit with code 1. */
 export function fail(message: string, code: ErrorCode = 'UNKNOWN'): never {
-  process.stdout.write(`${JSON.stringify({ ok: false, error: message, code })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ ok: false, account: ACCOUNT_NAME, error: message, code })}\n`,
+  );
   throw new CliError(message);
 }
 

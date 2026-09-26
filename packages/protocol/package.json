@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./proxy": "./src/proxy/index.ts",
     "./paths": "./src/paths.ts",
-    "./security": "./src/security.ts"
+    "./security": "./src/security.ts",
+    "./accounts": "./src/accounts.ts"
   },
   "dependencies": {
     "tdl": "^8.0.2",
