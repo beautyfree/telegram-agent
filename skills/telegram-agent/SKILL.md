@@ -11,7 +11,7 @@ allowed-tools: Bash(telegram-agent:*)
 
 # Telegram automation
 
-Use `telegram-agent` to work with the user’s real Telegram account. Output is JSON on stdout: `{ ok, data }` on success or `{ ok: false, error, code }` on failure. Warnings go to stderr. Prefer `jq` for inspecting results.
+Use `telegram-agent` to work with the user’s real Telegram account. Output is JSON on stdout: `{ ok, account, data }` on success or `{ ok: false, account, error, code }` on failure. Warnings go to stderr. Prefer `jq` for inspecting results.
 
 ## Setup
 
@@ -24,6 +24,22 @@ telegram-agent me
 ```
 
 The local daemon starts automatically and keeps the TDLib connection warm. Do not ask for Telegram application credentials in normal use; official binaries include them.
+
+## Account selection
+
+Use `telegram-agent accounts list` to discover configured accounts and
+`accounts current` to inspect the effective selection. The original session is
+`default`. Add a profile with `accounts add NAME` and authenticate interactively;
+use `accounts add NAME --no-login` when importing a session later.
+
+Choose the intended account before reading or acting. For multi-step workflows,
+pin every command with `--account NAME` (or a fixed `TG_ACCOUNT` environment variable)
+so another process changing `accounts use` cannot redirect an action. Do not infer
+the sending account from chat names alone. JSON results and stream events carry
+`account`; check it alongside the recipient. `accounts use NAME` changes future
+commands only. Never remove a profile without the user's request; removal deletes
+local session and media files and requires `--confirm`. Add `--logout` to revoke
+its Telegram session first.
 
 ## Commands
 

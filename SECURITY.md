@@ -28,7 +28,7 @@ Email **alex.elizarov1@gmail.com** with subject `telegram-agent security`. Pleas
 Both the Telegram daemon and the optional caption daemon bind only to `127.0.0.1`.
 Every HTTP endpoint, including health checks, authentication, media, and update
 streams, requires a bearer token stored in `daemon.token` under the application
-state directory (`~/.telegram-agent/` or `TG_APP_DIR`). The CLI manages this token
+selected account's state directory (the root for `default`, or `accounts/NAME/` for a named profile). The CLI manages this token
 automatically. On Unix, the state directory is restricted to mode `0700` and the
 token to `0600`. Keep the token private; do not paste it into logs or issue reports.
 
@@ -44,8 +44,9 @@ be downloaded into the media cache before being served over HTTP.
 
 ### Upgrading an already running daemon
 
-Stop the existing daemon with `telegram-agent daemon stop` before using the new
-CLI. If the optional caption daemon is running, stop its process too (its PID is
+Using the previously installed version, stop the existing daemon with
+`telegram-agent daemon stop` before using the new CLI. The updated stop command
+refuses to signal processes whose authenticated health/PID cannot be verified. If the optional caption daemon is running, stop its process too (its PID is
 recorded in `caption.pid` in the state directory). Updated clients reject older
 unauthenticated daemon health responses instead of falling back to them. Installing
 an updated binary does not secure a process that was already running.
@@ -54,3 +55,21 @@ Health probes do not keep either daemon alive. Real requests reset the idle time
 active Telegram update streams and requests in progress defer automatic shutdown.
 If a session may already have been exposed, revoke that session in Telegram's
 Devices settings: updating or stopping the CLI cannot revoke a copied session.
+
+## Multiple accounts
+
+Profiles have independent session databases, media/model caches, tokens, and
+services. All services retain loopback binding, bearer authentication, browser
+request rejection and media path confinement. Account selection is pinned at
+process startup. Explicit `--account NAME` is recommended for automation; a saved
+default is shared by future invocations in the same root.
+
+The account directories are an organizational boundary, not a security boundary
+between programs running as the same OS user. `eval --confirm` and other local
+code still have that user's filesystem access.
+
+Session import validates every archive entry before extracting into a private
+staging directory, rejects links and paths outside `tdlib_db`, and replaces only
+the selected account's database. Export/import stops its daemon first. Local
+profile deletion does not revoke a copied session; use `accounts remove NAME
+--confirm --logout` or Telegram's Devices settings to revoke authorization.

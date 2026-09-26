@@ -1,13 +1,11 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import {
-  chmodSync,
   closeSync,
   constants,
   fchmodSync,
   fstatSync,
   linkSync,
   lstatSync,
-  mkdirSync,
   openSync,
   readFileSync,
   realpathSync,
@@ -17,19 +15,13 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { APP_DIR } from './paths';
+import { ensurePrivateDirectory } from './storage';
+
+export { ensurePrivateDirectory } from './storage';
 
 export const DAEMON_HOST = '127.0.0.1';
 export const PROTOCOL_VERSION = '1';
 export const PROTOCOL_HEADER = 'X-Telegram-Agent-Protocol';
-
-export function ensurePrivateDirectory(directory: string): void {
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  const stat = lstatSync(directory);
-  if (!stat.isDirectory() || (process.getuid && stat.uid !== process.getuid())) {
-    throw new Error('Daemon state directory must be a directory owned by the current user');
-  }
-  if (process.platform !== 'win32') chmodSync(directory, 0o700);
-}
 
 /** Publish a complete token atomically, including when CLI processes start concurrently. */
 export function getDaemonToken(directory = APP_DIR): string {
