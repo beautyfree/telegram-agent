@@ -11,14 +11,14 @@
  *   7. Log lifecycle events
  */
 
-import { mkdirSync } from 'node:fs';
 import { startProxy } from '@tg/protocol/proxy';
+import { ensurePrivateDirectory, getDaemonToken } from '@tg/protocol/security';
 import { APP_DIR, DEFAULT_PORT, IDLE_TIMEOUT_MS, loadCredentials } from './config';
 import { log } from './logger';
 import { cleanStalePid, cleanupFiles, writePid, writePort } from './pid';
 
 async function startDaemon(): Promise<void> {
-  mkdirSync(APP_DIR, { recursive: true });
+  ensurePrivateDirectory(APP_DIR);
   cleanStalePid();
   writePid();
 
@@ -28,7 +28,14 @@ async function startDaemon(): Promise<void> {
   const port = Number(process.env.TG_DAEMON_PORT) || DEFAULT_PORT;
 
   log('Starting TDLib proxy...');
+  let shuttingDown = false;
   const proxy = await startProxy({
+    authToken: getDaemonToken(),
+    idleTimeoutMs: IDLE_TIMEOUT_MS,
+    onIdle: () => {
+      log('Idle timeout reached, shutting down');
+      void shutdown();
+    },
     apiId: credentials.apiId,
     apiHash: credentials.apiHash,
     port,
@@ -52,50 +59,12 @@ async function startDaemon(): Promise<void> {
     log('Not yet authorized (waiting for auth flow via HTTP)');
   }
 
-  // --- Idle timeout ---
-  // The proxy doesn't manage idle timeout — that's the daemon's job.
-  // We poll /health to check for active SSE connections before shutting down.
-  let idleTimer: ReturnType<typeof setTimeout>;
-
-  function resetIdleTimer(): void {
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(async () => {
-      try {
-        const res = await fetch(`http://localhost:${proxy.port}/health`);
-        const health = (await res.json()) as { connections?: number };
-        if ((health.connections ?? 0) > 0) {
-          log(`Idle timer fired but ${health.connections} connection(s) active, deferring`);
-          resetIdleTimer();
-          return;
-        }
-      } catch {
-        // If health check fails, proceed with shutdown
-      }
-      log('Idle timeout reached, shutting down');
-      shutdown();
-    }, IDLE_TIMEOUT_MS);
-  }
-  resetIdleTimer();
-
-  // Reset idle timer when proxy gets requests (poll health every 30s)
-  const healthPoll = setInterval(async () => {
-    try {
-      const res = await fetch(`http://localhost:${proxy.port}/health`);
-      if (res.ok) resetIdleTimer();
-    } catch {
-      // Ignore
-    }
-  }, 30_000);
-
   // --- Graceful shutdown ---
-  let shuttingDown = false;
 
   async function shutdown(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     log('Shutting down...');
-    clearTimeout(idleTimer);
-    clearInterval(healthPoll);
 
     try {
       await proxy.stop();

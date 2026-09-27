@@ -9,14 +9,7 @@
  * works for both the compiled binary and dev mode (bun + script).
  */
 
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   APP_DIR,
@@ -26,7 +19,13 @@ import {
   PID_FILE,
   PORT_FILE,
 } from '@tg/protocol/paths';
-import { warn } from './output';
+import {
+  authorizationHeaders,
+  daemonUrl,
+  ensurePrivateDirectory,
+  getDaemonToken,
+  requireSecureDaemon,
+} from '@tg/protocol/security';
 
 export { APP_DIR, LOG_FILE };
 
@@ -180,13 +179,19 @@ export function spawnDaemon(): void {
 async function waitForDaemon(port: number, timeoutMs = 5000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    let response: Response | undefined;
     try {
-      const res = await fetch(`http://localhost:${port}/health`, {
+      response = await fetch(`${daemonUrl(port)}/health`, {
+        headers: authorizationHeaders(getDaemonToken()),
+        redirect: 'error',
         signal: AbortSignal.timeout(1000),
       });
-      if (res.ok) return true;
     } catch {
       // Not ready yet
+    }
+    if (response) {
+      requireSecureDaemon(response);
+      return true;
     }
     await new Promise((r) => setTimeout(r, 200));
   }
@@ -199,22 +204,23 @@ async function waitForDaemon(port: number, timeoutMs = 5000): Promise<boolean> {
  */
 export async function ensureDaemon(): Promise<{ port: number; url: string }> {
   if (!isDaemonRunning()) {
+    getDaemonToken();
     spawnDaemon();
   }
 
   const port = getDaemonPort();
-  const url = `http://localhost:${port}`;
+  const url = daemonUrl(port);
 
   const ready = await waitForDaemon(port);
   if (!ready) {
     // The port file might not exist yet — re-read after spawn
     const retryPort = getDaemonPort();
     if (retryPort !== port) {
-      const retryUrl = `http://localhost:${retryPort}`;
+      const retryUrl = daemonUrl(retryPort);
       const retryReady = await waitForDaemon(retryPort);
       if (retryReady) return { port: retryPort, url: retryUrl };
     }
-    warn('Daemon did not respond to health check within 5 seconds');
+    throw new Error('Daemon did not respond to authenticated health check within 5 seconds');
   }
 
   return { port, url };
@@ -236,7 +242,7 @@ export async function ensureDaemon(): Promise<{ port: number; url: string }> {
  *   5. Crash handlers (uncaughtException, unhandledRejection)
  */
 export async function runDaemonMode(): Promise<void> {
-  mkdirSync(APP_DIR, { recursive: true });
+  ensurePrivateDirectory(APP_DIR);
 
   // Check for existing daemon
   if (existsSync(PID_FILE)) {
@@ -273,7 +279,14 @@ export async function runDaemonMode(): Promise<void> {
   // Search multiple locations: ~/.local/lib/, relative to binary, etc.
   const tdjson = findTdjsonPath() ?? undefined;
 
+  let shuttingDown = false;
   const proxy = await startProxy({
+    authToken: getDaemonToken(),
+    idleTimeoutMs: IDLE_TIMEOUT_MS,
+    onIdle: () => {
+      daemonLog('Idle timeout reached, shutting down');
+      void shutdown();
+    },
     apiId: credentials.apiId,
     apiHash: credentials.apiHash,
     port,
@@ -298,48 +311,12 @@ export async function runDaemonMode(): Promise<void> {
     daemonLog('Not yet authorized (waiting for auth flow via HTTP)');
   }
 
-  // --- Idle timeout ---
-  let idleTimer: ReturnType<typeof setTimeout>;
-
-  function resetIdleTimer(): void {
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(async () => {
-      try {
-        const res = await fetch(`http://localhost:${proxy.port}/health`);
-        const health = (await res.json()) as { connections?: number };
-        if ((health.connections ?? 0) > 0) {
-          daemonLog(`Idle timer fired but ${health.connections} connection(s) active, deferring`);
-          resetIdleTimer();
-          return;
-        }
-      } catch {
-        // If health check fails, proceed with shutdown
-      }
-      daemonLog('Idle timeout reached, shutting down');
-      shutdown();
-    }, IDLE_TIMEOUT_MS);
-  }
-  resetIdleTimer();
-
-  // Reset idle timer when proxy gets requests (poll health every 30s)
-  const healthPoll = setInterval(async () => {
-    try {
-      const res = await fetch(`http://localhost:${proxy.port}/health`);
-      if (res.ok) resetIdleTimer();
-    } catch {
-      // Ignore
-    }
-  }, 30_000);
-
   // --- Graceful shutdown ---
-  let shuttingDown = false;
 
   async function shutdown(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     daemonLog('Shutting down...');
-    clearTimeout(idleTimer);
-    clearInterval(healthPoll);
 
     try {
       await proxy.stop();

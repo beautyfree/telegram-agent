@@ -8,6 +8,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { APP_DIR } from '@tg/protocol/paths';
+import {
+  authorizationHeaders,
+  daemonUrl,
+  getDaemonToken,
+  requireSecureDaemon,
+} from '@tg/protocol/security';
 
 const MODEL_ID = 'onnx-community/Florence-2-base';
 const MODELS_DIR = path.join(APP_DIR, 'models');
@@ -71,13 +77,19 @@ function spawnCaptionDaemon(): void {
 async function waitForCaptionDaemon(port: number, timeoutMs = 30_000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    let response: Response | undefined;
     try {
-      const res = await fetch(`http://localhost:${port}/health`, {
+      response = await fetch(`${daemonUrl(port)}/health`, {
+        headers: authorizationHeaders(getDaemonToken()),
+        redirect: 'error',
         signal: AbortSignal.timeout(1000),
       });
-      if (res.ok) return true;
     } catch {
       // Not ready yet
+    }
+    if (response) {
+      requireSecureDaemon(response);
+      return true;
     }
     await new Promise((r) => setTimeout(r, 300));
   }
@@ -90,18 +102,19 @@ async function waitForCaptionDaemon(port: number, timeoutMs = 30_000): Promise<b
  */
 export async function ensureCaptionDaemon(): Promise<string> {
   if (!getCaptionPid()) {
+    getDaemonToken();
     spawnCaptionDaemon();
   }
 
   const port = getCaptionPort();
-  const url = `http://localhost:${port}`;
+  const url = daemonUrl(port);
 
   const ready = await waitForCaptionDaemon(port);
   if (!ready) {
     // Port file might not exist yet — re-read after spawn
     const retryPort = getCaptionPort();
     if (retryPort !== port) {
-      const retryUrl = `http://localhost:${retryPort}`;
+      const retryUrl = daemonUrl(retryPort);
       const retryReady = await waitForCaptionDaemon(retryPort, 5000);
       if (retryReady) return retryUrl;
     }
@@ -129,7 +142,8 @@ export async function captionFiles(
 
   const res = await fetch(`${url}/caption`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authorizationHeaders(getDaemonToken()) },
+    redirect: 'error',
     body: JSON.stringify({ files, maxTokens }),
   });
 
