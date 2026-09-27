@@ -40,8 +40,12 @@ compact JSON otherwise. `--json` and `--pretty` override detection before accoun
 selection, so bootstrap errors use the requested format too. Streaming uses the
 same selection while retaining the original NDJSON event schema in machine mode.
 The readable renderer wraps by terminal display width, preserves grapheme clusters,
-and neutralizes terminal control sequences from untrusted content. No new runtime
-dependency is required.
+and neutralizes terminal control sequences from untrusted content before styling.
+The table layout uses symbols from the existing `@clack/prompts` dependency and
+Clack’s cyan/green/dim palette via `node:util.styleText`. Color is applied after
+measuring and wrapping plain text, so ANSI codes do not change column widths.
+Terminal capability and color opt-outs are checked separately from output format;
+JSON never includes presentation escapes. No new runtime dependency is required.
 
 ## Credentials and advanced setup
 

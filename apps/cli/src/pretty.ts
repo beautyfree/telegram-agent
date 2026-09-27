@@ -1,8 +1,10 @@
 import { stripVTControlCharacters } from 'node:util';
+import { createTheme, glyphs, type TerminalTheme } from './terminal-theme';
 
 export interface PrettyOptions {
   width?: number;
   command?: string;
+  color?: boolean;
 }
 
 type RecordValue = Record<string, unknown>;
@@ -41,6 +43,18 @@ function scalar(value: unknown): string {
   return terminalText(String(value));
 }
 
+function styleValue(key: string, value: unknown, text: string, theme: TerminalTheme): string {
+  if (value === null || value === undefined || value === false || value === '')
+    return theme.muted(text);
+  if (value === true) return theme.success(text);
+  if (key === 'account' && String(value).startsWith(`${glyphs.selected} `))
+    return theme.heading(text);
+  if (key === 'daemon' || key === 'caption')
+    return String(value).startsWith('Running') ? theme.success(text) : theme.muted(text);
+  if (key === 'session') return value === 'Stored' ? theme.success(text) : theme.muted(text);
+  return text;
+}
+
 /** Wrap by display cells, preserving graphemes and all text (including long URLs). */
 function wrap(text: string, width: number): string[] {
   const lines: string[] = [];
@@ -69,23 +83,34 @@ function wrap(text: string, width: number): string[] {
   return lines;
 }
 
-function field(key: string, value: unknown, width: number, indent: string): string[] {
+function field(
+  key: string,
+  value: unknown,
+  width: number,
+  indent: string,
+  theme: TerminalTheme,
+): string[] {
   const heading = `${label(key)}:`;
   const space = width - measure(indent);
   if (isScalar(value)) {
     const text = scalar(value);
     if (!text.includes('\n') && measure(heading) + 1 + measure(text) <= space) {
-      return [`${indent}${heading} ${text}`];
+      return [`${indent}${theme.accent(heading)} ${styleValue(key, value, text, theme)}`];
     }
   }
   return [
-    ...wrap(heading, Math.max(1, space)).map((line) => indent + line),
-    ...render(value, width, `${indent}  `),
+    ...wrap(heading, Math.max(1, space)).map((line) => indent + theme.accent(line)),
+    ...render(value, width, `${indent}  `, 0, theme),
   ];
 }
 
 /** Use a table only for short, flat records. Nested records and narrow screens use details. */
-function table(rows: RecordValue[], width: number, indent: string): string[] | null {
+function table(
+  rows: RecordValue[],
+  width: number,
+  indent: string,
+  theme: TerminalTheme,
+): string[] | null {
   const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   if (
     !keys.length ||
@@ -104,7 +129,8 @@ function table(rows: RecordValue[], width: number, indent: string): string[] | n
   const minimum = natural.map((size, i) =>
     Math.max(measure(headings[i] ?? ''), Math.min(size, 12)),
   );
-  const budget = width - measure(indent) - 3 * (keys.length - 1);
+  // Each cell has one space on either side plus a shared vertical border.
+  const budget = width - measure(indent) - (3 * keys.length + 1);
   if (minimum.reduce((a, b) => a + b, 0) > budget) return null;
   const widths = [...minimum];
   let remaining = budget - widths.reduce((a, b) => a + b, 0);
@@ -116,25 +142,32 @@ function table(rows: RecordValue[], width: number, indent: string): string[] | n
       }
     }
   }
-  const rowLines = (row: string[]) => {
+  const rule = (left: string, join: string, right: string) =>
+    indent +
+    theme.muted(left + widths.map((size) => glyphs.horizontal.repeat(size + 2)).join(join) + right);
+  const rowLines = (row: string[], rowIndex?: number) => {
     const wrapped = row.map((cell, i) => wrap(cell, widths[i] ?? 1));
-    return Array.from(
-      { length: Math.max(...wrapped.map((cell) => cell.length)) },
-      (_, line) =>
-        indent +
-        wrapped
-          .map((cell, i) => {
-            const text = cell[line] ?? '';
-            return text + ' '.repeat(Math.max(0, (widths[i] ?? 0) - measure(text)));
-          })
-          .join('   ')
-          .trimEnd(),
-    );
+    return Array.from({ length: Math.max(...wrapped.map((cell) => cell.length)) }, (_, line) => {
+      const content = wrapped
+        .map((cell, i) => {
+          const text = cell[line] ?? '';
+          const key = keys[i] ?? '';
+          const value = rowIndex === undefined ? undefined : rows[rowIndex]?.[key];
+          const styled =
+            rowIndex === undefined ? theme.heading(text) : styleValue(key, value, text, theme);
+          return ` ${styled}${' '.repeat(Math.max(0, (widths[i] ?? 0) - measure(text)))} `;
+        })
+        .join(theme.muted(glyphs.bar));
+      return indent + theme.muted(glyphs.bar) + content + theme.muted(glyphs.bar);
+    });
   };
+  const divider = rule(glyphs.leftJoin, glyphs.middleJoin, glyphs.rightJoin);
   return [
+    rule(glyphs.topLeft, glyphs.topJoin, glyphs.topRight),
     ...rowLines(headings),
-    indent + widths.map((size) => '─'.repeat(size)).join('   '),
-    ...cells.flatMap(rowLines),
+    divider,
+    ...cells.flatMap((row, i) => [...(i ? [divider] : []), ...rowLines(row, i)]),
+    rule(glyphs.bottomLeft, glyphs.bottomJoin, glyphs.bottomRight),
   ];
 }
 
@@ -146,7 +179,13 @@ function isMessage(value: RecordValue): boolean {
   );
 }
 
-function render(value: unknown, width: number, indentation = '', depth = 0): string[] {
+function render(
+  value: unknown,
+  width: number,
+  indentation = '',
+  depth = 0,
+  theme: TerminalTheme = createTheme(),
+): string[] {
   // Keep labels visible even with deeply nested TDLib results on a narrow terminal.
   const indent = indentation.slice(0, Math.max(0, width - 16));
   if (depth > 12)
@@ -157,7 +196,7 @@ function render(value: unknown, width: number, indentation = '', depth = 0): str
   if (Array.isArray(value)) {
     if (!value.length) return [`${indent}No results.`];
     if (value.every(isRecord) && !value.some(isMessage)) {
-      const rows = table(value, width, indent);
+      const rows = table(value, width, indent, theme);
       if (rows) return rows;
     }
     return value.flatMap((item, i) => {
@@ -167,8 +206,8 @@ function render(value: unknown, width: number, indentation = '', depth = 0): str
         );
       return [
         ...(i ? [''] : []),
-        `${indent}${i + 1}.`,
-        ...render(item, width, `${indent}  `, depth + 1),
+        `${indent}${theme.accent(`${i + 1}.`)}`,
+        ...render(item, width, `${indent}  `, depth + 1, theme),
       ];
     });
   }
@@ -176,12 +215,12 @@ function render(value: unknown, width: number, indentation = '', depth = 0): str
     const entries = Object.entries(value);
     if (!entries.length) return [`${indent}Done.`];
     return entries.flatMap(([key, item]) => {
-      if (isScalar(item)) return field(key, item, width, indent);
+      if (isScalar(item)) return field(key, item, width, indent, theme);
       return [
         ...wrap(`${label(key)}:`, Math.max(1, width - measure(indent))).map(
-          (line) => indent + line,
+          (line) => indent + theme.accent(line),
         ),
-        ...render(item, width, `${indent}  `, depth + 1),
+        ...render(item, width, `${indent}  `, depth + 1, theme),
       ];
     });
   }
@@ -197,7 +236,7 @@ function accountOverview(data: RecordValue): RecordValue[] | null {
         ? `Running${value.port ? ` :${value.port}` : ''}`
         : 'Stopped';
     return {
-      account: account.name,
+      account: `${account.name === data.selected ? `${glyphs.selected} ` : ''}${account.name}`,
       user:
         [identity.firstName, identity.username ? `@${identity.username}` : undefined, identity.id]
           .filter((v) => v !== undefined)
@@ -211,39 +250,49 @@ function accountOverview(data: RecordValue): RecordValue[] | null {
 
 /** Format the existing response envelope without changing its machine-readable data. */
 export function prettyResult(result: RecordValue, options: PrettyOptions = {}): string {
-  const width = Math.max(16, Math.min(options.width || 100, 160));
+  const width = Math.max(16, Math.min(options.width || 100, 160)) - 3;
+  const theme = createTheme(options.color);
   const title =
     result.ok === false ? `Error · ${scalar(result.code)}` : label(options.command || 'Result');
-  const lines = [...wrap(title, width)];
+  const titleLines = wrap(title, width);
+  const lines = titleLines.map(
+    (line, i) =>
+      `${theme.muted(i ? glyphs.bar : glyphs.start)}  ${result.ok === false ? theme.error(line) : theme.heading(line)}`,
+  );
+  const body: string[] = [];
   if (result.account !== undefined)
-    lines.push(...wrap(`Account: ${scalar(result.account)}`, width));
-  lines.push('');
+    body.push(...wrap(`Account: ${scalar(result.account)}`, width).map(theme.muted));
+  body.push('');
   if (result.ok === false) {
-    lines.push(...wrap(scalar(result.error), width));
+    body.push(...wrap(scalar(result.error), width));
   } else {
     const data = result.data;
     const overview =
       options.command === 'accounts list' && isRecord(data) ? accountOverview(data) : null;
     if (overview && isRecord(data)) {
-      lines.push(
-        ...field('selected', data.selected, width, ''),
-        ...field('saved default', data.active, width, ''),
+      body.push(
+        ...field('selected', data.selected, width, '', theme),
+        ...field('saved default', data.active, width, '', theme),
         '',
-        ...render(overview, width),
+        ...render(overview, width, '', 0, theme),
         '',
         ...wrap('Details: accounts status <name>', width),
       );
     } else {
-      lines.push(...render(data === undefined ? {} : data, width));
+      body.push(...render(data === undefined ? {} : data, width, '', 0, theme));
     }
     if (result.hasMore !== undefined || result.nextOffset !== undefined) {
-      lines.push('');
+      body.push('');
       if (result.hasMore !== undefined)
-        lines.push(...field('more results', result.hasMore, width, ''));
+        body.push(...field('more results', result.hasMore, width, '', theme));
       if (result.nextOffset !== undefined)
-        lines.push(...field('next offset', result.nextOffset, width, ''));
+        body.push(...field('next offset', result.nextOffset, width, '', theme));
     }
   }
+  lines.push(
+    ...body.map((line) => (line ? `${theme.muted(glyphs.bar)}  ${line}` : theme.muted(glyphs.bar))),
+    theme.muted(glyphs.end),
+  );
   return `${lines.join('\n')}\n`;
 }
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 const CLI = path.resolve(import.meta.dir, '../../src/index.ts');
 let root: string;
@@ -153,6 +154,6 @@ test('terminal detection selects readable output and explicit JSON overrides it'
     const stdout = await new Response(child.stdout).text();
     expect(await child.exited).toBe(0);
     if (json) expect(JSON.parse(stdout).data.running).toBe(false);
-    else expect(stdout).toContain('Running: No');
+    else expect(stripVTControlCharacters(stdout)).toContain('Running: No');
   }
 });

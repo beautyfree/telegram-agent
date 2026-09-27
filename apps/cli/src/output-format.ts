@@ -1,5 +1,6 @@
 // This module must not import account paths: bootstrap errors use it before selection.
 import { prettyEvent, prettyResult } from './pretty';
+import { supportsOutputColor } from './terminal-theme';
 
 export type OutputFormat = 'auto' | 'json' | 'pretty';
 let format: OutputFormat = 'auto';
@@ -27,7 +28,11 @@ const replacer = (_key: string, value: unknown): unknown =>
 export function writeResult(result: Record<string, unknown>): void {
   process.stdout.write(
     usesPrettyOutput()
-      ? prettyResult(result, { command, width: process.stdout.columns })
+      ? prettyResult(result, {
+          command,
+          width: process.stdout.columns,
+          color: supportsOutputColor(),
+        })
       : `${JSON.stringify(result, replacer)}\n`,
   );
 }
@@ -35,7 +40,7 @@ export function writeResult(result: Record<string, unknown>): void {
 export function writeEvent(event: Record<string, unknown>): void {
   process.stdout.write(
     usesPrettyOutput()
-      ? `${prettyEvent(event, { width: process.stdout.columns })}\n`
+      ? `${prettyEvent(event, { width: process.stdout.columns, color: supportsOutputColor() })}\n`
       : `${JSON.stringify(event, replacer)}\n`,
   );
 }

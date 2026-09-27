@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
+import { stripVTControlCharacters } from 'node:util';
 import { prettyEvent, prettyResult, terminalText } from '../../src/pretty';
+import { glyphs, supportsOutputColor } from '../../src/terminal-theme';
 
 const success = (data: unknown, width = 100) =>
   prettyResult({ ok: true, account: 'work', data }, { width });
@@ -15,7 +17,10 @@ test('flat lists use aligned tables and keep numeric identifiers unchanged', () 
   expect(out).toContain('-1001234567890');
   expect(out).toContain('设计 👩‍💻');
   expect(out).toContain('─');
-  const rows = out.split('\n').filter((line) => line.startsWith('-100') || line.startsWith('42'));
+  const rows = out
+    .split('\n')
+    .filter((line) => line.includes('-1001234567890') || line.includes('设计 👩‍💻'));
+  expect(rows).toHaveLength(2);
   expect(Bun.stringWidth(rows[0] ?? '')).toBe(Bun.stringWidth(rows[1] ?? ''));
 });
 
@@ -90,7 +95,12 @@ test('narrow terminals switch to details, wrap full text and do not split graphe
 test('long identifiers and URLs are wrapped without truncation', () => {
   const url = 'https://example.com/path/to/a/very-long-document?key=abcdefghijklmnopqrstuvwxyz';
   const out = success({ url }, 24);
-  const content = out.split('Url:\n')[1] ?? '';
+  const content =
+    out
+      .split('\n')
+      .map((line) => (line.startsWith(`${glyphs.bar}  `) ? line.slice(3) : ''))
+      .join('\n')
+      .split('Url:\n')[1] ?? '';
   expect(content.replace(/\s/g, '')).toBe(url);
   for (const line of out.split('\n')) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(24);
 });
@@ -160,4 +170,63 @@ test('streamed events carry a heading, account and complete nested event data', 
     'world',
   ])
     expect(out).toContain(value);
+});
+
+test('Clack frames, rounded table borders and selected markers survive without color', () => {
+  const out = prettyResult(
+    {
+      ok: true,
+      account: 'work',
+      data: {
+        selected: 'work',
+        active: 'default',
+        accounts: [
+          { name: 'work', hasSession: true, daemon: { running: true, port: 12345 } },
+          { name: 'personal', hasSession: false },
+        ],
+      },
+    },
+    { command: 'accounts list', color: false },
+  );
+  for (const glyph of [glyphs.start, glyphs.end, glyphs.topLeft, glyphs.bottomRight])
+    expect(out).toContain(glyph);
+  expect(out).toContain(`${glyphs.selected} work`);
+  expect(out).not.toContain(`${glyphs.selected} personal`);
+  expect(out).not.toContain('\u001b');
+});
+
+test('color changes presentation only, preserving display widths, Unicode and safe text', () => {
+  const result = {
+    ok: true,
+    account: 'work',
+    data: [
+      { title: '设计 👩‍💻', running: true },
+      { title: '\u001b[2JHostile', running: false },
+    ],
+  };
+  const plain = prettyResult(result, { width: 48, color: false });
+  const colored = prettyResult(result, { width: 48, color: true });
+  expect(colored).toContain('\u001b[36m');
+  expect(colored).toContain('\u001b[32m');
+  expect(colored).not.toContain('\u001b[2J');
+  expect(stripVTControlCharacters(colored)).toBe(plain);
+  for (const line of colored.split('\n')) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(48);
+  const error = prettyResult(
+    { ok: false, account: 'work', code: 'PERMISSION', error: 'Refused' },
+    { color: true },
+  );
+  expect(error).toContain('\u001b[31m');
+});
+
+test('color is enabled only on capable terminals and respects opt-outs', () => {
+  expect(supportsOutputColor(true, { TERM: 'xterm-256color' })).toBe(true);
+  expect(supportsOutputColor(false, { FORCE_COLOR: '1' })).toBe(false);
+  for (const env of [
+    { NO_COLOR: '' },
+    { NO_COLOR: '1' },
+    { FORCE_COLOR: '0' },
+    { NODE_DISABLE_COLORS: '1' },
+    { TERM: 'dumb' },
+  ])
+    expect(supportsOutputColor(true, env)).toBe(false);
 });

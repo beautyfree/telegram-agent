@@ -235,7 +235,11 @@ credential blob (`.data.blob`); the readable view may wrap long values.
 
 The readable format adapts to terminal width, falls back to detail blocks on narrow
 screens, preserves multiline text and Unicode names, and shows empty results and
-pagination explicitly. It adds no color escape codes. Control sequences from
+pagination explicitly. It uses Clack’s rounded borders, guide lines, cyan headings, and green status accents.
+The selected account has a visible marker, including in monochrome. Color is enabled
+only on terminal stdout and disabled by `NO_COLOR`, `NODE_DISABLE_COLORS=1`,
+`FORCE_COLOR=0`, or `TERM=dumb`. Explicit `--pretty` in a pipe stays uncolored.
+Control sequences from
 Telegram content are neutralized for terminal display; JSON retains the original
 values. Display formatting does not change existing command-level limits such as
 search text previews (`--full` retrieves full search text).
