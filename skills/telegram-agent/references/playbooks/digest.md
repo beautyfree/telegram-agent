@@ -1,6 +1,6 @@
 # Channel or DM digest
 
-Choose the account using the main skill’s account-selection rules. Replace `NAME` below with that profile and keep the same account throughout this workflow. Include it in any action approval.
+Use the effective default unless the user requests another account. Resolve and pin that account once for this multi-step workflow, as described in the main skill; include it in any action approval. The short examples below assume that selection.
 
 Use this for “what did I miss?” requests. Preserve the user’s unread state unless they explicitly ask to change it.
 
@@ -8,19 +8,19 @@ Use this for “what did I miss?” requests. Preserve the user’s unread state
 
 ```bash
 # Recent messages
-telegram-agent --account NAME msg list @channel --limit 100
+telegram-agent msg list @channel --limit 100
 
 # A time window (Unix timestamp)
-telegram-agent --account NAME msg list @channel --since 1717000000 --limit 200
+telegram-agent msg list @channel --since 1717000000 --limit 200
 
 # Search within one chat
-telegram-agent --account NAME msg list @channel --query "launch" --limit 100
+telegram-agent msg list @channel --query "launch" --limit 100
 ```
 
 Commands return `{ ok, data }`. For list responses, items are in `.data.items`; pagination metadata, when present, is top-level (`.hasMore`, `.nextOffset`).
 
 ```bash
-telegram-agent --account NAME msg list @channel --limit 100 \
+telegram-agent msg list @channel --limit 100 \
   | jq '.data.items[] | {id, date, from, text}'
 ```
 

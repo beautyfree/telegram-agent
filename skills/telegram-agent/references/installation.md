@@ -48,7 +48,7 @@ For repeated shell use, persist the two exports in your shell configuration only
 
 ## Multiple accounts
 
-Requires CLI 2.1.0 or newer. Check `telegram-agent --version` and update the CLI if account commands are unavailable. Updating the skill alone does not update the binary.
+Requires CLI 2.1.1 or newer. Check `telegram-agent --version` and update the CLI if account commands are unavailable. Updating the skill alone does not update the binary.
 
 ```bash
 telegram-agent accounts add work
@@ -63,7 +63,7 @@ profile without switching the saved default. Use `--no-login` to defer login or
 import a session. Select explicitly with `--account NAME` or `TG_ACCOUNT=NAME`;
 these override the saved default, in that order. Every command supports account
 selection, including login, logout, streaming, media, and session portability.
-For automated actions, always specify the intended account. If multiple profiles exist and the user has not selected one for the task, clarify before reading or acting. Verify identity with `telegram-agent --account NAME me`; include the source account in action approvals. Do not change the saved default just to run a task.
+For automated actions, always specify the intended account. Ordinary commands keep using the effective default even when several profiles exist. Ask only if the requested account is ambiguous; for a multi-step task, resolve and pin the effective profile once. Verify identity with `telegram-agent --account NAME me`; include the source account in action approvals. Do not change the saved default just to run a task.
 
 Each profile has independent state and local services; multiple accounts can run
 at once. Changing the default affects future commands only. See the

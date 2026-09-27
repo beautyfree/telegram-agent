@@ -36,10 +36,15 @@ requireAccount(ACCOUNT_NAME);
 const authToken = getDaemonToken();
 const server =
   prefix === 'tg_daemon'
-    ? await startProxy({ authToken, client: client as unknown as ProxyOptions['client'] })
+    ? await startProxy({
+        authToken,
+        onShutdown: shutdown,
+        client: client as unknown as ProxyOptions['client'],
+      })
     : serveLocal({
         port: 0,
         authToken,
+        onShutdown: shutdown,
         fetch(request) {
           if (new URL(request.url).pathname === '/health')
             return Response.json(
@@ -65,7 +70,7 @@ setInterval(
 );
 writeFileSync(path.join(APP_DIR, `${prefix}.pid`), String(process.pid));
 writeFileSync(path.join(APP_DIR, `${prefix}.port`), String(server.port));
-process.on('SIGTERM', async () => {
+async function shutdown() {
   if (process.env.FIXTURE_STOP_MARKER) {
     writeFileSync(process.env.FIXTURE_STOP_MARKER, 'stopping');
     await Bun.sleep(500);
@@ -74,6 +79,7 @@ process.on('SIGTERM', async () => {
   unlinkSync(path.join(APP_DIR, `${prefix}.pid`));
   unlinkSync(path.join(APP_DIR, `${prefix}.port`));
   process.exit(0);
-});
+}
+process.on('SIGTERM', shutdown);
 releaseStartup();
 console.log(server.port);
