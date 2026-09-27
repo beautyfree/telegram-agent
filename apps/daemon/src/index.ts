@@ -11,16 +11,25 @@
  *   7. Log lifecycle events
  */
 
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, selectedAccount } from '@tg/protocol/accounts';
+
 import { startProxy } from '@tg/protocol/proxy';
 import { ensurePrivateDirectory, getDaemonToken } from '@tg/protocol/security';
 import { APP_DIR, DEFAULT_PORT, IDLE_TIMEOUT_MS, loadCredentials } from './config';
 import { log } from './logger';
 import { cleanStalePid, cleanupFiles, writePid, writePort } from './pid';
 
+let ownsPid = false;
+
 async function startDaemon(): Promise<void> {
+  const account = selectedAccount();
+  const releaseStartup = acquireAccountLocks([account]);
+  requireAccount(account);
   ensurePrivateDirectory(APP_DIR);
   cleanStalePid();
   writePid();
+  ownsPid = true;
 
   const credentials = loadCredentials();
   log(`API credentials loaded (ID: ${credentials.apiId})`);
@@ -42,6 +51,7 @@ async function startDaemon(): Promise<void> {
   });
 
   writePort(proxy.port);
+  releaseStartup();
   log(`Daemon ready (PID ${process.pid}, port ${proxy.port})`);
 
   // Try to log username
@@ -96,7 +106,7 @@ async function startDaemon(): Promise<void> {
 }
 
 startDaemon().catch((e) => {
-  log(`Fatal: ${(e as Error).message}`);
-  cleanupFiles();
+  console.error(`Fatal: ${(e as Error).message}`);
+  if (ownsPid) cleanupFiles();
   process.exit(1);
 });

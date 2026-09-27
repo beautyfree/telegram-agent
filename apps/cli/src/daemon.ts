@@ -11,6 +11,8 @@
 
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, selectedAccount } from '@tg/protocol/accounts';
 import {
   APP_DIR,
   CREDENTIALS_FILE,
@@ -224,6 +226,9 @@ export async function ensureDaemon(): Promise<{ port: number; url: string }> {
  *   5. Crash handlers (uncaughtException, unhandledRejection)
  */
 export async function runDaemonMode(): Promise<void> {
+  const account = selectedAccount();
+  const releaseStartup = acquireAccountLocks([account]);
+  requireAccount(account);
   ensurePrivateDirectory(APP_DIR);
 
   // Check for existing daemon
@@ -276,6 +281,7 @@ export async function runDaemonMode(): Promise<void> {
   });
 
   writeFileSync(PORT_FILE, String(proxy.port));
+  releaseStartup();
   daemonLog(`Daemon ready (PID ${process.pid}, port ${proxy.port})`);
 
   // Try to log username

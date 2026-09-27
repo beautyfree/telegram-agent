@@ -90,9 +90,11 @@ export function authorizeRequest(req: Request, port: number, token: string): Res
 export function requireSecureDaemon(response: Response): void {
   if (!response.ok || response.headers.get(PROTOCOL_HEADER) !== PROTOCOL_VERSION) {
     throw new Error(
-      'Daemon authentication failed or an older daemon is running. Stop the existing daemon ' +
-        'with `telegram-agent daemon stop` and restart with the updated CLI. ' +
-        'For the caption service, stop its existing process before retrying.',
+      'Daemon authentication failed or an older daemon is running. Before upgrading, use the OLD CLI ' +
+        "to run `telegram-agent daemon stop`. If already upgraded, inspect the selected account's " +
+        'tg_daemon.pid / caption.pid, verify the process identity in your OS process manager, ' +
+        'and stop that verified process manually. Do not blindly signal a saved PID. ' +
+        'Then retry with the updated CLI; see SECURITY.md for upgrade recovery.',
     );
   }
 }

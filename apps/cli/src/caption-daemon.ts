@@ -8,6 +8,8 @@
 
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, selectedAccount } from '@tg/protocol/accounts';
 import { APP_DIR } from '@tg/protocol/paths';
 import {
   ensurePrivateDirectory,
@@ -53,6 +55,9 @@ function captionLog(msg: string): void {
 // ---------------------------------------------------------------------------
 
 export async function runCaptionDaemon(): Promise<void> {
+  const account = selectedAccount();
+  const releaseStartup = acquireAccountLocks([account]);
+  requireAccount(account);
   ensurePrivateDirectory(APP_DIR);
   const authToken = getDaemonToken();
 
@@ -205,6 +210,7 @@ export async function runCaptionDaemon(): Promise<void> {
   });
 
   writeFileSync(PORT_FILE, String(server.port));
+  releaseStartup();
   captionLog(`Caption daemon ready (PID ${process.pid}, port ${server.port}, device ${device})`);
 
   // ---------------------------------------------------------------------------
