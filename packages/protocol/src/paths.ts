@@ -6,11 +6,8 @@
  * obvious to users where their session lives. Override with the
  * `TG_APP_DIR` env var when you need a custom location.
  *
- * (avemeva/kurier upstream uses platform-specific dirs — macOS
- * `~/Library/Application Support`, XDG on Linux, `%LOCALAPPDATA%` on
- * Windows. We deliberately diverge: skill-bundle ergonomics matter
- * more than OS-native conventions for our audience, and 1.x users on
- * gram.js are already at `~/.telegram-agent/`.)
+ * This shared location keeps skill instructions consistent across platforms
+ * and preserves the state directory used by the gram.js-based 1.x CLI.
  */
 
 import { existsSync } from 'node:fs';

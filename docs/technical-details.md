@@ -42,8 +42,8 @@ The v2 npm distribution publishes platform-specific compiled binaries and the
 `telegram-agent` wrapper package together from the release workflow. The source
 contains the release tooling at [`apps/cli/scripts/publish.ts`](../apps/cli/scripts/publish.ts).
 
-## Project history and attribution
+## Project history
 
-v2 is a GPL-3.0 fork of [avemeva/kurier](https://github.com/avemeva/kurier). It adds Saved-Messages reaction tags, portable session export/import, and universal AI-agent skill distribution. The legally required upstream notice and a precise change record are in [ATTRIBUTION.md](../ATTRIBUTION.md).
+v2 uses TDLib and is distributed under [GPL-3.0](../LICENSE). It includes Saved-Messages reaction tags, portable session export/import, and universal AI-agent skill distribution. See the [changelog](../CHANGELOG.md) for release details.
 
 v1.x, through `v1.0.12`, used gram.js under MIT. Source remains on branch/tag `legacy-gramjs`.

@@ -164,5 +164,5 @@ Run `telegram-agent --help` for flags, pagination, and individual command usage.
 - [Install, sign in, move a session, and troubleshoot](skills/telegram-agent/references/installation.md)
 - [CLI command reference](apps/cli/README.md)
 - [Security model and reporting](SECURITY.md)
-- [Technical details, compatibility, and upstream attribution](docs/technical-details.md) — including why [ATTRIBUTION.md](ATTRIBUTION.md) is retained for the GPL-3.0 fork
+- [Technical details and compatibility](docs/technical-details.md)
 - [Release history](CHANGELOG.md)

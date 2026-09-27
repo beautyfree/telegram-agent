@@ -26,7 +26,7 @@ Version 2.1.0 was not published: its release gate exposed Windows shutdown/test 
 ## [2.0.0] — 2026-07-23
 
 ### Changed
-- Rebuilt the CLI on TDLib as a GPL-3.0 fork of `avemeva/kurier`.
+- Rebuilt the CLI on TDLib and switched to GPL-3.0.
 - The npm distribution now installs a platform-specific compiled binary through
   the `telegram-agent` wrapper package.
 - Documentation, installation commands, environment variables and command
