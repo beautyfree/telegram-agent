@@ -1,6 +1,6 @@
 # telegram-agent
 
-Telegram CLI for AI agents. Read messages, send messages, search, download media, manage chats — all from the terminal. JSON output, designed for automation.
+Telegram CLI for AI agents. Read messages, send messages, search, download media, manage chats — all from the terminal. Readable terminal output and JSON for automation.
 
 ## Setup
 
@@ -168,7 +168,8 @@ telegram-agent media transcribe <chat> <msgId>
 ### Real-time Streaming
 
 ```bash
-telegram-agent listen --type user              # Stream events as NDJSON
+telegram-agent listen --type user              # Readable live events in a terminal
+telegram-agent listen --type user --json       # Stream events as NDJSON
 telegram-agent listen --chat 12345             # Stream specific chat
 ```
 
@@ -203,12 +204,50 @@ All commands accepting `<chat>` support:
 
 ## Output
 
-Command results and errors are JSON on stdout, with the selected `account` alongside `ok` and `data`/`error`. Warnings go to stderr. Interactive login, help, doctor, and plain daemon logs are human-readable. Pipe through `jq` for processing:
+Command results use **tables and labeled details in a terminal**, with the selected
+account displayed above the result. Compact lists such as chats, members, and tags
+use tables. Messages and nested data use detail blocks with multiline text.
+Account lists show a compact overview; `accounts status NAME` displays full details.
+A stored session indicates local files, not verified authorization.
+
+When stdout is piped or redirected, results keep the existing **compact JSON**
+envelope, including `ok`, `account`, `data`/`error`, and pagination metadata.
+Streaming uses one JSON object per line (NDJSON) in pipes. No script changes are
+needed for existing JSON pipelines.
+
+Use global flags before or after a subcommand to override detection:
 
 ```bash
-telegram-agent chats list --unread | jq '.data.items[].title'
-telegram-agent msg search "meeting" | jq '.data.items[].content'
+telegram-agent accounts list                      # Readable account table
+telegram-agent --account work chats list          # Readable chat table
+telegram-agent msg list @username --limit 5        # Message details
+telegram-agent --json accounts list               # JSON even in a terminal
+telegram-agent chats list --pretty | less         # Readable output through a pipe
+telegram-agent listen --chat 12345 --json          # NDJSON regardless of destination
+telegram-agent chats list --unread | jq '.data[].title'
+telegram-agent msg search "meeting" --json | jq '.data[].text'
 ```
+
+`--json` and `--pretty` are mutually exclusive. Use `--` before literal arguments
+that look like format flags. Prefer explicit `--json` in agents and integrations
+that might allocate a terminal. For session exports, use JSON to retrieve the exact
+credential blob (`.data.blob`); the readable view may wrap long values.
+
+The readable format adapts to terminal width, falls back to detail blocks on narrow
+screens, preserves multiline text and Unicode names, and shows empty results and
+pagination explicitly. It uses Clack’s rounded borders, guide lines, cyan headings, and green status accents.
+The selected account has a visible marker, including in monochrome. Color is enabled
+only on terminal stdout and disabled by `NO_COLOR`, `NODE_DISABLE_COLORS=1`,
+`FORCE_COLOR=0`, or `TERM=dumb`. Explicit `--pretty` in a pipe stays uncolored.
+Control sequences from
+Telegram content are neutralized for terminal display; JSON retains the original
+values. Display formatting does not change existing command-level limits such as
+search text previews (`--full` retrieves full search text).
+
+Warnings remain on stderr, and results/errors keep their existing stdout channel
+and exit status. Help and interactive login prompts remain human-readable.
+`doctor` and `daemon log` retain their existing readable defaults; both accept
+`--json` for structured output. `--pretty` also formats daemon logs as labeled details.
 
 ## Pagination
 

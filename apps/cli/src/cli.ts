@@ -19,6 +19,7 @@ import { register as registerSession } from './commands/session';
 import { ensureDaemon, runDaemonMode } from './daemon';
 import { formatHelp } from './help';
 import { CliError, fail, mapErrorCode, warn } from './output';
+import { setOutputCommand, usesPrettyOutput } from './output-format';
 import { pending } from './pending';
 
 // --- Daemon mode: `tg --daemon` (must be checked before Commander) ---
@@ -42,15 +43,23 @@ const program = new Command()
   .version(process.env.TG_VERSION ?? '0.0.0-dev', '--version')
   .option('--timeout <seconds>', 'Timeout in seconds')
   .option('--account <name>', 'Use a named Telegram account for this command')
+  .option('--json', 'Machine-readable JSON (default when piped)')
+  .option('--pretty', 'Readable tables and details (default in a terminal)')
   .helpOption('--help', 'Show help')
   .exitOverride()
   .configureHelp({ formatHelp })
   .configureOutput({
     writeOut: (str) => process.stdout.write(str),
-    writeErr: (str) => process.stderr.write(str),
+    writeErr: (str) => {
+      if (!usesPrettyOutput()) process.stderr.write(str);
+    },
   });
 
 program.hook('preAction', (_root, action) => {
+  const names: string[] = [];
+  for (let current: Command | null = action; current?.parent; current = current.parent)
+    names.unshift(current.name());
+  setOutputCommand(names.join(' '));
   if (action.parent?.name() !== 'accounts') requireAccount(selectedAccount());
 });
 

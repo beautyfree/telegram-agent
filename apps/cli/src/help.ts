@@ -68,7 +68,9 @@ const CATEGORIES: Category[] = [
   },
   {
     title: 'Real-time',
-    entries: [['listen', 'Stream real-time events (NDJSON). Requires --chat or --type.']],
+    entries: [
+      ['listen', 'Stream events (NDJSON when piped or with --json). Requires --chat or --type.'],
+    ],
   },
   {
     title: 'Media',
@@ -127,12 +129,14 @@ function formatRootHelp(): string {
   lines.push('');
   lines.push('Usage: telegram-agent <command> [args] [--flags]');
   lines.push('');
-  lines.push('stdout: JSON { ok, data } | { ok, error, code }');
+  lines.push('stdout: readable in terminals; JSON when piped or with --json');
   lines.push('stderr: warnings');
   lines.push('Entities: numeric ID | @username | +phone | t.me/link | "me"');
   lines.push('Negative chat IDs: pass directly or as `-- -100... --flag ...`');
   lines.push('');
   lines.push('Global flags:');
+  lines.push('  --json        Machine-readable JSON (NDJSON for listen)');
+  lines.push('  --pretty      Readable tables and details, even when piped');
   lines.push('  --timeout N   Timeout in seconds');
   lines.push('  --account NAME  Use this account (overrides TG_ACCOUNT and saved default)');
 
@@ -214,6 +218,8 @@ function formatLeafHelp(cmd: Command): string {
     }
   }
 
+  lines.push('');
+  lines.push('Output: --json for JSON; --pretty for readable output (default in a terminal).');
   lines.push('');
   return lines.join('\n');
 }

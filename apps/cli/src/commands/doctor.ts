@@ -11,6 +11,7 @@ import {
   ROOT_DIR,
 } from '@tg/protocol/paths';
 import type { Command } from 'commander';
+import { getOutputFormat, writeResult } from '../output-format';
 
 type Status = 'ok' | 'FAIL' | '-';
 
@@ -102,6 +103,16 @@ export function register(parent: Command): void {
       const version = process.env.TG_VERSION ?? '0.0.0-dev';
       const checks: Check[] = [checkBinary(), checkTdlib(), checkConfig(), checkDaemon()];
 
+      const failures = checks.filter((c) => c.status === 'FAIL');
+      if (getOutputFormat() === 'json') {
+        writeResult({
+          ok: failures.length === 0,
+          account: ACCOUNT_NAME,
+          data: { version, checks },
+          ...(failures.length ? { error: 'Installation checks failed', code: 'INVALID_ARGS' } : {}),
+        });
+        process.exit(failures.length > 0 ? 1 : 0);
+      }
       console.log(`\ntelegram-agent v${version} — account ${ACCOUNT_NAME}\n`);
 
       const nameWidth = 10;
@@ -114,8 +125,6 @@ export function register(parent: Command): void {
         const detail = check.detail ? `${check.detail}` : '';
         console.log(`  ${name} ${statusStr}${detail}`);
       }
-
-      const failures = checks.filter((c) => c.status === 'FAIL');
 
       console.log('');
       if (failures.length === 0) {

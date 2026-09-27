@@ -11,7 +11,7 @@ allowed-tools: Bash(telegram-agent:*)
 
 # Telegram automation
 
-Use `telegram-agent` to work with the user’s real Telegram account. Output is JSON on stdout: `{ ok, account, data }` on success or `{ ok: false, account, error, code }` on failure. Warnings go to stderr. Prefer `jq` for inspecting results.
+Use `telegram-agent` to work with the user’s real Telegram account. Use `--json` when consuming results programmatically, including when a tool allocates a terminal. Pipes default to JSON; terminals default to readable tables/details. JSON is written to stdout: `{ ok, account, data }` on success or `{ ok: false, account, error, code }` on failure. Warnings go to stderr. `listen --json` produces NDJSON, one event per line. `--pretty` explicitly selects readable output; never parse it as JSON. Help and interactive login prompts remain human-readable. Prefer `jq` for inspecting results.
 
 ## Setup
 

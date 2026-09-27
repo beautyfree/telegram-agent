@@ -1,8 +1,10 @@
 import { ACCOUNT_NAME } from '@tg/protocol/paths';
+import { writeResult } from './output-format';
+import { terminalText } from './pretty';
 /**
  * Output formatting for the CLI.
  *
- * stdout: JSON only — { ok, data } or { ok, error, code }
+ * stdout: readable in terminals; original JSON envelopes in pipes or with --json
  * stderr: warnings, debug messages
  *
  * No AsyncLocalStorage — the CLI is a single-process, single-command tool.
@@ -89,20 +91,18 @@ export function success(data: unknown, meta?: PaginationMeta): void {
     if (meta.hasMore !== undefined) result.hasMore = meta.hasMore;
     if (meta.nextOffset !== undefined) result.nextOffset = meta.nextOffset;
   }
-  process.stdout.write(`${JSON.stringify(result, bigIntReplacer)}\n`);
+  writeResult(result);
 }
 
 /** Write error to stdout and exit with code 1. */
 export function fail(message: string, code: ErrorCode = 'UNKNOWN'): never {
-  process.stdout.write(
-    `${JSON.stringify({ ok: false, account: ACCOUNT_NAME, error: message, code })}\n`,
-  );
+  writeResult({ ok: false, account: ACCOUNT_NAME, error: message, code });
   throw new CliError(message);
 }
 
 /** Write a warning to stderr. */
 export function warn(message: string): void {
-  console.error(`[warn] ${message}`);
+  console.error(`[warn] ${terminalText(message)}`);
 }
 
 // --- Error code mapping (Telegram RPC errors → structured codes) ---

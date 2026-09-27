@@ -5,6 +5,8 @@ import type { Command } from 'commander';
 import { stopAccountServices } from '../account-runtime';
 import { ensureDaemon, getDaemonPid, LOG_FILE } from '../daemon';
 import { fail, success } from '../output';
+import { getOutputFormat } from '../output-format';
+import { terminalText } from '../pretty';
 
 export function register(parent: Command): void {
   const daemon = parent.command('daemon').description('Daemon lifecycle management');
@@ -59,15 +61,14 @@ export function register(parent: Command): void {
   daemon
     .command('log')
     .description('Show last 20 lines of daemon log')
-    .option('--json', 'Output as JSON')
-    .action((opts: { json?: boolean }) => {
+    .action(() => {
       if (existsSync(LOG_FILE)) {
         const log = readFileSync(LOG_FILE, 'utf-8');
         const lines = log.trim().split('\n');
-        if (opts.json) {
+        if (getOutputFormat() !== 'auto') {
           success({ lines: lines.slice(-20) });
         } else {
-          process.stdout.write(`${lines.slice(-20).join('\n')}\n`);
+          process.stdout.write(`${terminalText(lines.slice(-20).join('\n'))}\n`);
         }
       } else {
         fail('No daemon log file', 'NOT_FOUND');

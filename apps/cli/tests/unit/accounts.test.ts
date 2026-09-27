@@ -181,14 +181,26 @@ test('session export and import operate only on the selected profile', async () 
   expect(readFileSync(path.join(root, 'tdlib_db', 'session'), 'utf8')).toBe('default');
 });
 
-test('a running listener keeps its account after the saved default changes', async () => {
+test.each([
+  false,
+  true,
+])('a running listener keeps its account after the saved default changes (pretty=%s)', async (pretty) => {
   addAccount('work', root);
   addAccount('personal', root);
   await daemon('work');
   await daemon('personal');
   useAccount('work', root);
   const child = Bun.spawn(
-    [process.execPath, CLI, 'listen', '--chat', '123', '--event', 'user_status'],
+    [
+      process.execPath,
+      CLI,
+      'listen',
+      '--chat',
+      '123',
+      '--event',
+      'user_status',
+      ...(pretty ? ['--pretty'] : []),
+    ],
     {
       env: { ...process.env, TG_APP_DIR: root, TG_ACCOUNT: undefined },
       stdout: 'pipe',
@@ -200,10 +212,14 @@ test('a running listener keeps its account after the saved default changes', asy
   const timer = setTimeout(() => child.kill(), 5000);
   try {
     const first = await reader.read();
-    expect(new TextDecoder().decode(first.value)).toContain('"account":"work"');
+    expect(new TextDecoder().decode(first.value)).toContain(
+      pretty ? 'Account: work' : '"account":"work"',
+    );
     useAccount('personal', root);
     const second = await reader.read();
-    expect(new TextDecoder().decode(second.value)).toContain('"account":"work"');
+    expect(new TextDecoder().decode(second.value)).toContain(
+      pretty ? 'Account: work' : '"account":"work"',
+    );
   } finally {
     reader.releaseLock();
     clearTimeout(timer);

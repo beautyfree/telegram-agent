@@ -19,7 +19,7 @@ npx skills add beautyfree/telegram-agent --skill telegram-agent -a claude-code -
 
 ## Architecture
 
-`telegram-agent` connects through TDLib/MTProto as a Telegram user, rather than through Bot API. The installed skill gives an agent task guidance; the local CLI performs the Telegram operation and returns structured JSON. A local background daemon starts when needed and exits after ten minutes idle. Session data lives under `~/.telegram-agent/`; treat it like a password.
+`telegram-agent` connects through TDLib/MTProto as a Telegram user, rather than through Bot API. The installed skill gives an agent task guidance; the local CLI performs the Telegram operation and returns readable terminal results or structured JSON for pipes and `--json`. A local background daemon starts when needed and exits after ten minutes idle. Session data lives under `~/.telegram-agent/`; treat it like a password.
 
 ### Account isolation
 
@@ -31,6 +31,21 @@ services use private tokens and dynamically allocated loopback ports; port files
 are written after binding. Changing the saved default never mutates a running
 process's selection. Renaming/removal authenticates service health and verifies its
 PID before stopping it and changing local files.
+
+### Output rendering
+
+Command handlers continue to produce the same structured response envelopes. A
+shared presentation layer selects tables/details when stdout is a terminal and
+compact JSON otherwise. `--json` and `--pretty` override detection before account
+selection, so bootstrap errors use the requested format too. Streaming uses the
+same selection while retaining the original NDJSON event schema in machine mode.
+The readable renderer wraps by terminal display width, preserves grapheme clusters,
+and neutralizes terminal control sequences from untrusted content before styling.
+The table layout uses symbols from the existing `@clack/prompts` dependency and
+Clack’s cyan/green/dim palette via `node:util.styleText`. Color is applied after
+measuring and wrapping plain text, so ANSI codes do not change column widths.
+Terminal capability and color opt-outs are checked separately from output format;
+JSON never includes presentation escapes. No new runtime dependency is required.
 
 ## Credentials and advanced setup
 
