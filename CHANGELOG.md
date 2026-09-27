@@ -4,6 +4,15 @@ All notable changes to `telegram-agent` are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.2] — 2026-09-27
+
+### Changed
+- Show readable tables and labeled message details when the CLI writes to a terminal. Piped output stays JSON, and `--json` forces JSON for agents and other tools that allocate a terminal.
+- Format live events for terminal reading; `listen --json` keeps NDJSON for integrations.
+
+### Fixed
+- Neutralize control sequences from Telegram content in terminal output while preserving the original values in JSON.
+
 ## [2.1.1] — 2026-09-27
 
 Version 2.1.0 was not published: its release gate exposed Windows shutdown/test portability issues.
