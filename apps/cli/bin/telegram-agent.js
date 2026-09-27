@@ -12,7 +12,12 @@ function run(target) {
     console.error(result.error.message);
     process.exit(1);
   }
-  process.exit(typeof result.status === 'number' ? result.status : 0);
+  if (result.signal) {
+    console.error(`telegram-agent terminated by ${result.signal}`);
+    const signalNumber = os.constants.signals[result.signal];
+    process.exit(typeof signalNumber === 'number' ? 128 + signalNumber : 1);
+  }
+  process.exit(typeof result.status === 'number' ? result.status : 1);
 }
 
 // Allow override via environment variable
