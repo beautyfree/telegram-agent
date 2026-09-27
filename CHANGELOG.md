@@ -4,13 +4,16 @@ All notable changes to `telegram-agent` are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.1.0] — 2026-09-27
+## [2.1.1] — 2026-09-27
+
+Version 2.1.0 was not published: its release gate exposed Windows shutdown/test portability issues.
 
 ### Added
 - Named Telegram accounts with isolated sessions, media caches, tokens and services.
 - Account lifecycle locks prevent daemon startup during profile changes and session transfers.
 
 ### Fixed
+- Shut down daemons through authenticated local HTTP before moving/removing session files; Windows process termination does not run Unix signal handlers.
 - Authenticate local daemon endpoints, bind to loopback, reject browser requests and isolate media from session files.
 - Sign finished macOS binaries and verify signatures after npm packaging.
 - Preserve native process failures in the npm wrapper, including SIGKILL exit code 137.

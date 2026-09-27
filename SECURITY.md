@@ -90,3 +90,5 @@ If the binary was already upgraded while a legacy daemon was running, the new
 command line with your OS process manager before stopping it manually. A stale PID
 may belong to another program; never kill it based on the PID file alone. Restart
 with the updated CLI afterward. Never delete the session directory to fix this.
+
+Profile operations verify authenticated health and PID, then request graceful shutdown over the authenticated local `/shutdown` endpoint and wait for process exit. This closes TDLib before changing its database on Windows as well as Unix; it does not depend on Unix signal delivery.

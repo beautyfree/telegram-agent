@@ -269,6 +269,7 @@ export async function runDaemonMode(): Promise<void> {
   let shuttingDown = false;
   const proxy = await startProxy({
     authToken: getDaemonToken(),
+    onShutdown: shutdown,
     idleTimeoutMs: IDLE_TIMEOUT_MS,
     onIdle: () => {
       daemonLog('Idle timeout reached, shutting down');

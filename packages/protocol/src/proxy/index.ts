@@ -58,6 +58,7 @@ export interface ProxyOptions {
   /** Shut down after real request inactivity; health probes do not count. */
   idleTimeoutMs?: number;
   onIdle?: () => void;
+  onShutdown?: () => void | Promise<void>;
   /** Telegram API ID. Required when `client` is not provided. */
   apiId?: number;
   /** Telegram API hash. Required when `client` is not provided. */
@@ -597,6 +598,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
 
   const httpServer = serveLocal({
     authToken: options.authToken,
+    onShutdown: options.onShutdown,
     port,
     async fetch(req) {
       const isHealth = new URL(req.url).pathname === '/health';

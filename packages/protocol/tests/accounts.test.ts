@@ -46,8 +46,10 @@ test('legacy session stays in place as default with no migration', () => {
 
 test('profiles and metadata are private and names cannot escape the accounts directory', () => {
   const work = addAccount('work', root);
-  expect(statSync(work).mode & 0o777).toBe(0o700);
-  expect(statSync(path.join(work, 'account.json')).mode & 0o777).toBe(0o600);
+  if (process.platform !== 'win32') {
+    expect(statSync(work).mode & 0o777).toBe(0o700);
+    expect(statSync(path.join(work, 'account.json')).mode & 0o777).toBe(0o600);
+  }
   for (const name of ['../other', '/tmp', 'Work', '', '.', 'a/b', 'a\\b', 'con', 'x'.repeat(33)]) {
     expect(() => validateAccountName(name)).toThrow();
   }

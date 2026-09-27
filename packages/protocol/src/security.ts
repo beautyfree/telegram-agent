@@ -123,6 +123,7 @@ export function resolveMediaPath(directory: string, relativePath: string): strin
 export function serveLocal(options: {
   port: number;
   authToken: string;
+  onShutdown?: () => void | Promise<void>;
   fetch: (req: Request) => Response | Promise<Response>;
 }) {
   if (!/^[a-f0-9]{64}$/.test(options.authToken)) {
@@ -133,7 +134,19 @@ export function serveLocal(options: {
     port: options.port,
     fetch(req, server) {
       const denied = authorizeRequest(req, server.port ?? options.port, options.authToken);
-      return denied ?? options.fetch(req);
+      if (denied) return denied;
+      if (
+        options.onShutdown &&
+        req.method === 'POST' &&
+        new URL(req.url).pathname === '/shutdown'
+      ) {
+        // Reply before closing the listener; the caller waits for process termination.
+        setTimeout(() => {
+          void options.onShutdown?.();
+        }, 10);
+        return Response.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
+      }
+      return options.fetch(req);
     },
   });
 }
