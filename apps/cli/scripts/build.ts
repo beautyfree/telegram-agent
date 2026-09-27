@@ -112,6 +112,13 @@ if (result.exitCode !== 0) {
   process.exit(result.exitCode ?? 1);
 }
 
+// Bun's compiled Mach-O can retain an invalid linker signature after embedding
+// the application. Sign the finished executable before installing or archiving it.
+if (os === 'darwin') {
+  await $`codesign --force --sign - ${outfile}`;
+  await $`codesign --verify --strict --verbose=2 ${outfile}`;
+}
+
 // Platform package.json for npm publishing
 await Bun.file(`dist/${name}/package.json`).write(
   JSON.stringify(
