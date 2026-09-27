@@ -132,7 +132,7 @@ The CLI connects directly to Telegram and keeps its session on the machine that 
 <details>
 <summary><strong>CLI surface and data model</strong></summary>
 
-All CLI commands return JSON to stdout and accept numeric IDs, `@usernames`, `t.me` links, phone numbers from contacts, or `me`/`self` for Saved Messages.
+Command results appear as readable tables and labeled details in a terminal. Pipes keep JSON output for automation; use `--json` or `--pretty` to choose explicitly. Commands accept numeric IDs, `@usernames`, `t.me` links, phone numbers from contacts, or `me`/`self` for Saved Messages.
 
 | Area | Commands |
 | --- | --- |

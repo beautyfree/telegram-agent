@@ -4,6 +4,7 @@ import type * as Td from 'tdlib-types';
 import { enrichMessage } from '../enrich';
 import { flattenMessage } from '../flatten';
 import { fail, warn } from '../output';
+import { writeEvent } from '../output-format';
 import { pending } from '../pending';
 import { resolveChatId } from '../resolve';
 import { slimMessage } from '../slim';
@@ -12,7 +13,9 @@ import { getChatType, VALID_CHAT_TYPES } from './_helpers';
 export function register(parent: Command): void {
   parent
     .command('listen')
-    .description('Stream real-time events (NDJSON). Requires --chat or --type.')
+    .description(
+      'Stream real-time events (NDJSON when piped or with --json). Requires --chat or --type.',
+    )
     .option('--chat <ids>', 'Comma-separated chat IDs to include')
     .option('--type <type>', 'Include entire category: user, group, or channel')
     .option('--exclude-chat <ids>', 'Comma-separated chat IDs to exclude from included set')
@@ -43,7 +46,7 @@ export function register(parent: Command): void {
 
         const emit = (event: Record<string, unknown>) => {
           if (!eventFilter.has(event.type as string)) return;
-          process.stdout.write(`${JSON.stringify({ ...event, account: ACCOUNT_NAME })}\n`);
+          writeEvent({ ...event, account: ACCOUNT_NAME });
         };
 
         const typeFilter = opts.type as string | undefined;
