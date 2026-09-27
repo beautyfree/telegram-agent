@@ -14,7 +14,7 @@
     },
     "apps/cli": {
       "name": "@tg/cli",
-      "version": "2.1.0",
+      "version": "2.1.1",
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@huggingface/transformers": "next",

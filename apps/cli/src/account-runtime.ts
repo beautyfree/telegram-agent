@@ -86,7 +86,16 @@ export async function stopAccountServices(
     const health = (await response.json()) as { pid?: number };
     if (health.pid !== state.pid)
       throw new Error(`Refusing to stop an unverified process for account "${name}"`);
-    process.kill(state.pid, 'SIGTERM');
+    const stopped = await fetch(`${daemonUrl(state.port)}/shutdown`, {
+      method: 'POST',
+      headers: authorizationHeaders(getDaemonToken(directory)),
+      redirect: 'error',
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!stopped.ok)
+      throw new Error(
+        `The ${service} daemon cannot shut down gracefully; profile retained. Stop it with its matching CLI version before retrying`,
+      );
     const deadline = Date.now() + 5000;
     while (serviceState(directory, service).running) {
       if (Date.now() >= deadline)

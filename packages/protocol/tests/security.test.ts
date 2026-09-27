@@ -96,6 +96,7 @@ describe('local HTTP boundary', () => {
       '/api/tg/auth/password',
       '/api/tg/auth/resend',
       '/api/tg/auth/logout',
+      '/shutdown',
     ]) {
       expect(
         (await request(server, route, { method: 'POST', headers: {}, body: '{}' })).status,
@@ -407,4 +408,28 @@ describe('authenticated client requests', () => {
       target.stop(true);
     }
   });
+});
+
+test('graceful shutdown requires an authenticated non-browser POST', async () => {
+  let shutdowns = 0;
+  const server = await start({
+    onShutdown: () => {
+      shutdowns++;
+    },
+  });
+  expect((await request(server, '/shutdown', { method: 'POST', headers: {} })).status).toBe(401);
+  expect(
+    (
+      await request(server, '/shutdown', {
+        method: 'POST',
+        headers: { ...headers, Origin: 'https://example.com' },
+      })
+    ).status,
+  ).toBe(403);
+  expect((await request(server, '/shutdown')).status).toBe(404);
+  await delay(30);
+  expect(shutdowns).toBe(0);
+  expect((await request(server, '/shutdown', { method: 'POST' })).status).toBe(200);
+  await delay(30);
+  expect(shutdowns).toBe(1);
 });

@@ -154,6 +154,7 @@ export async function runCaptionDaemon(): Promise<void> {
   let activeRequests = 0;
   const server = serveLocal({
     authToken,
+    onShutdown: shutdown,
     port,
     fetch: async (req) => {
       const url = new URL(req.url);
