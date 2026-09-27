@@ -17,15 +17,21 @@
  * it like a password — never paste into chat, never commit, never email.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { DB_DIR } from '@tg/protocol/paths';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, saveIdentity, selectedAccount } from '@tg/protocol/accounts';
+import { APP_DIR, DB_DIR } from '@tg/protocol/paths';
 import type { Command } from 'commander';
+import { stopAccountServices } from '../account-runtime';
 import { fail, success, warn } from '../output';
+import { importSessionArchive } from '../session-archive';
 
 function runTar(args: string[]): { stdout: Buffer; ok: boolean; stderr: string } {
-  const r = spawnSync('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const r = spawnSync('tar', args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
+  });
   return {
     stdout: r.stdout ?? Buffer.alloc(0),
     ok: r.status === 0,
@@ -42,20 +48,27 @@ export function register(parent: Command): void {
     .description(
       'Dump the current TDLib session as a base64 blob (=credential — treat as password)',
     )
-    .action(() => {
-      // No client needed — pure file-system snapshot of TDLib's DB dir.
-      if (!existsSync(DB_DIR)) {
-        fail(`No session found at ${DB_DIR}. Run \`telegram-agent login\` first.`, 'NOT_FOUND');
+    .action(async () => {
+      const release = acquireAccountLocks([selectedAccount()]);
+      try {
+        requireAccount(selectedAccount());
+        // No client needed — pure file-system snapshot of TDLib's DB dir.
+        if (!existsSync(DB_DIR)) {
+          fail(`No session found at ${DB_DIR}. Run \`telegram-agent login\` first.`, 'NOT_FOUND');
+        }
+        await stopAccountServices(undefined, ['tg_daemon']);
+        const r = runTar(['-C', path.dirname(DB_DIR), '-czf', '-', path.basename(DB_DIR)]);
+        if (!r.ok) fail(`tar failed while exporting session: ${r.stderr.trim()}`, 'UNKNOWN');
+        const blob = r.stdout.toString('base64');
+        success({
+          format: 'tdlib-session-tar.b64.v1',
+          sessionDir: DB_DIR,
+          bytes: r.stdout.length,
+          blob,
+        });
+      } finally {
+        release();
       }
-      const r = runTar(['-C', path.dirname(DB_DIR), '-czf', '-', path.basename(DB_DIR)]);
-      if (!r.ok) fail(`tar failed while exporting session: ${r.stderr.trim()}`, 'UNKNOWN');
-      const blob = r.stdout.toString('base64');
-      success({
-        format: 'tdlib-session-tar.b64.v1',
-        sessionDir: DB_DIR,
-        bytes: r.stdout.length,
-        blob,
-      });
     });
 
   // --- session import ---
@@ -74,43 +87,32 @@ export function register(parent: Command): void {
       }
       if (!blob) fail('Pass the blob via --string "<base64>" or --stdin', 'INVALID_ARGS');
 
-      if (existsSync(DB_DIR) && !opts.force) {
-        fail(
-          `A session already exists at ${DB_DIR}. Re-run with --force to overwrite, ` +
-            'or `telegram-agent logout` first.',
-          'PERMISSION',
-        );
-      }
-
-      const tarBytes = Buffer.from(blob, 'base64');
-      if (tarBytes.length === 0) fail('Decoded blob is empty — wrong format?', 'INVALID_ARGS');
-
-      mkdirSync(path.dirname(DB_DIR), { recursive: true });
-      const tmpTar = path.join(homedir(), `.telegram-agent-import-${Date.now()}.tar.gz`);
-      writeFileSync(tmpTar, tarBytes, { mode: 0o600 });
+      const release = acquireAccountLocks([selectedAccount()]);
       try {
-        const r = spawnSync('tar', ['-C', path.dirname(DB_DIR), '-xzf', tmpTar], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        if (r.status !== 0) {
+        requireAccount(selectedAccount());
+        if (existsSync(DB_DIR) && !opts.force) {
           fail(
-            `tar failed while importing session: ${r.stderr?.toString('utf-8').trim()}`,
-            'UNKNOWN',
+            `A session already exists at ${DB_DIR}. Re-run with --force to overwrite, ` +
+              'or `telegram-agent logout` first.',
+            'PERMISSION',
           );
         }
-      } finally {
-        try {
-          require('node:fs').unlinkSync(tmpTar);
-        } catch {}
-      }
 
-      if (!existsSync(DB_DIR)) {
-        fail(
-          'Import completed but the expected session directory does not exist — blob format mismatch?',
-          'UNKNOWN',
-        );
+        const tarBytes = Buffer.from(blob, 'base64');
+        if (tarBytes.length === 0) fail('Decoded blob is empty — wrong format?', 'INVALID_ARGS');
+
+        await stopAccountServices(undefined, ['tg_daemon']);
+        try {
+          importSessionArchive(tarBytes, APP_DIR);
+        } catch (error) {
+          fail((error as Error).message, 'INVALID_ARGS');
+        }
+        saveIdentity(undefined);
+
+        warn('Session imported. Run `telegram-agent me` to verify it authenticates.');
+        success({ sessionDir: DB_DIR, bytes: tarBytes.length });
+      } finally {
+        release();
       }
-      warn('Session imported. Run `telegram-agent me` to verify it authenticates.');
-      success({ sessionDir: DB_DIR, bytes: tarBytes.length });
     });
 }

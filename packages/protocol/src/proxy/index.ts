@@ -18,7 +18,7 @@ import {
 
 const DEFAULT_DB_DIR = DB_DIR;
 const DEFAULT_FILES_DIR = FILES_DIR;
-const DEFAULT_PORT = 7312;
+const DEFAULT_PORT = 0;
 
 const bigIntReplacer = (_key: string, value: unknown) =>
   typeof value === 'bigint' ? value.toString() : value;
@@ -62,11 +62,11 @@ export interface ProxyOptions {
   apiId?: number;
   /** Telegram API hash. Required when `client` is not provided. */
   apiHash?: string;
-  /** Port to listen on. Default: 7312 */
+  /** Port to listen on. Default: 0 (an available loopback port) */
   port?: number;
-  /** TDLib database directory. Default: ~/Library/Application Support/dev.telegramai.app/tdlib_db */
+  /** TDLib database directory. Default: selected account's tdlib_db directory */
   databaseDirectory?: string;
-  /** TDLib files directory. Default: ~/Library/Application Support/dev.telegramai.app/media_cache */
+  /** TDLib files directory. Default: selected account's media_cache directory */
   filesDirectory?: string;
   /** Path to libtdjson shared library. Default: resolved by prebuilt-tdlib. */
   tdjson?: string;

@@ -20,7 +20,6 @@ const MODELS_DIR = path.join(APP_DIR, 'models');
 const DTYPE = 'q4';
 const PID_FILE = path.join(APP_DIR, 'caption.pid');
 const PORT_FILE = path.join(APP_DIR, 'caption.port');
-const DEFAULT_PORT = 7313;
 
 // ---------------------------------------------------------------------------
 // PID / port helpers
@@ -38,15 +37,15 @@ function getCaptionPid(): number | null {
   }
 }
 
-function getCaptionPort(): number {
+function getCaptionPort(): number | null {
   try {
     const raw = readFileSync(PORT_FILE, 'utf-8').trim();
     const port = Number(raw);
-    if (port > 0 && port < 65536) return port;
+    if (Number.isInteger(port) && port > 0 && port < 65536) return port;
   } catch {
     // Port file doesn't exist or is unreadable
   }
-  return DEFAULT_PORT;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,56 +73,31 @@ function spawnCaptionDaemon(): void {
 // Wait / ensure
 // ---------------------------------------------------------------------------
 
-async function waitForCaptionDaemon(port: number, timeoutMs = 30_000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    let response: Response | undefined;
-    try {
-      response = await fetch(`${daemonUrl(port)}/health`, {
-        headers: authorizationHeaders(getDaemonToken()),
-        redirect: 'error',
-        signal: AbortSignal.timeout(1000),
-      });
-    } catch {
-      // Not ready yet
-    }
-    if (response) {
-      requireSecureDaemon(response);
-      return true;
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  return false;
-}
-
-/**
- * Ensure the caption daemon is running. Spawns it if needed and waits for health.
- * Returns the base URL. 30s timeout for model loading.
- */
 export async function ensureCaptionDaemon(): Promise<string> {
-  if (!getCaptionPid()) {
-    getDaemonToken();
-    spawnCaptionDaemon();
-  }
-
-  const port = getCaptionPort();
-  const url = daemonUrl(port);
-
-  const ready = await waitForCaptionDaemon(port);
-  if (!ready) {
-    // Port file might not exist yet — re-read after spawn
-    const retryPort = getCaptionPort();
-    if (retryPort !== port) {
-      const retryUrl = daemonUrl(retryPort);
-      const retryReady = await waitForCaptionDaemon(retryPort, 5000);
-      if (retryReady) return retryUrl;
+  const token = getDaemonToken();
+  if (!getCaptionPid()) spawnCaptionDaemon();
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const port = getCaptionPort();
+    if (port) {
+      let response: Response | undefined;
+      try {
+        response = await fetch(`${daemonUrl(port)}/health`, {
+          headers: authorizationHeaders(token),
+          redirect: 'error',
+          signal: AbortSignal.timeout(1000),
+        });
+      } catch {
+        /* Still loading. */
+      }
+      if (response) {
+        requireSecureDaemon(response);
+        return daemonUrl(port);
+      }
     }
-    throw new Error(
-      'Caption model did not load within 30s. Is it downloaded? Run "tg caption download".',
-    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-
-  return url;
+  throw new Error('Selected account caption daemon did not become ready within 30 seconds');
 }
 
 // ---------------------------------------------------------------------------

@@ -21,6 +21,17 @@ npx skills add beautyfree/telegram-agent --skill telegram-agent -a claude-code -
 
 `telegram-agent` connects through TDLib/MTProto as a Telegram user, rather than through Bot API. The installed skill gives an agent task guidance; the local CLI performs the Telegram operation and returns structured JSON. A local background daemon starts when needed and exits after ten minutes idle. Session data lives under `~/.telegram-agent/`; treat it like a password.
 
+### Account isolation
+
+The entry point resolves `--account`, `TG_ACCOUNT`, and the saved selection before
+loading modules that capture filesystem paths. Child processes inherit the resolved
+account. The original root directory is the implicit `default`; named profiles use
+`accounts/NAME/` beneath it. No session migration is performed. Each account's
+services use private tokens and dynamically allocated loopback ports; port files
+are written after binding. Changing the saved default never mutates a running
+process's selection. Renaming/removal authenticates service health and verifies its
+PID before stopping it and changing local files.
+
 ## Credentials and advanced setup
 
 Most users should follow interactive sign-in. For custom deployments, environment configuration, multiple accounts, session portability, or troubleshooting, see [installation reference](../skills/telegram-agent/references/installation.md).

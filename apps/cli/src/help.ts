@@ -18,6 +18,19 @@ interface Category {
 
 const CATEGORIES: Category[] = [
   {
+    title: 'Accounts',
+    entries: [
+      ['accounts list', 'List accounts and their local status'],
+      ['accounts current', 'Show selected account and saved default'],
+      ['accounts add', 'Add a named account and log in'],
+      ['accounts login', 'Log in or reconnect an existing account'],
+      ['accounts use', 'Set the default account for future commands'],
+      ['accounts status', 'Check one account without starting it'],
+      ['accounts rename', 'Rename a named account'],
+      ['accounts remove', 'Remove local account files (requires --confirm)'],
+    ],
+  },
+  {
     title: 'Identity',
     entries: [
       ['me', 'Get current user info'],
@@ -121,6 +134,7 @@ function formatRootHelp(): string {
   lines.push('');
   lines.push('Global flags:');
   lines.push('  --timeout N   Timeout in seconds');
+  lines.push('  --account NAME  Use this account (overrides TG_ACCOUNT and saved default)');
 
   for (const cat of CATEGORIES) {
     lines.push('');

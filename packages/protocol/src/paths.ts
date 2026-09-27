@@ -16,6 +16,7 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { getAccountDir, getRootDir, selectedAccount } from './accounts';
 
 const platform = process.platform;
 
@@ -24,24 +25,11 @@ const platform = process.platform;
 // ---------------------------------------------------------------------------
 
 export function getAppDir(): string {
-  if (process.env.TG_APP_DIR) return process.env.TG_APP_DIR;
-  // Unified dotfile across platforms — matches 1.x behavior, easier to
-  // document in SKILL.md ("look at ~/.telegram-agent/"). Windows users
-  // get `%USERPROFILE%\.telegram-agent\` which is just as valid as
-  // `%LOCALAPPDATA%\telegram-agent\` for our use case.
-  return path.join(homedir(), '.telegram-agent');
+  return getAccountDir(selectedAccount());
 }
 
-// ---------------------------------------------------------------------------
-// Config directory (API credentials)
-// ---------------------------------------------------------------------------
-
 export function getConfigDir(): string {
-  // Same unified base as `getAppDir()` — config (api credentials)
-  // lives alongside session state under `~/.telegram-agent/`. One
-  // location to chmod, one location to back up, one location to wipe
-  // when uninstalling.
-  return path.join(homedir(), '.telegram-agent');
+  return getAppDir();
 }
 
 // ---------------------------------------------------------------------------
@@ -125,6 +113,8 @@ export function findTdjsonPath(): string | null {
 // Derived paths (convenience)
 // ---------------------------------------------------------------------------
 
+export const ROOT_DIR = getRootDir();
+export const ACCOUNT_NAME = selectedAccount();
 export const APP_DIR = getAppDir();
 export const CONFIG_DIR = getConfigDir();
 export const DB_DIR = path.join(APP_DIR, 'tdlib_db');

@@ -11,6 +11,8 @@
 
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, selectedAccount } from '@tg/protocol/accounts';
 import {
   APP_DIR,
   CREDENTIALS_FILE,
@@ -18,6 +20,7 @@ import {
   LOG_FILE,
   PID_FILE,
   PORT_FILE,
+  ROOT_DIR,
 } from '@tg/protocol/paths';
 import {
   authorizationHeaders,
@@ -29,7 +32,7 @@ import {
 
 export { APP_DIR, LOG_FILE };
 
-const DEFAULT_PORT = 7312;
+const DEFAULT_PORT = 0;
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
@@ -82,6 +85,8 @@ export function loadCredentials(): { apiId: number; apiHash: string } {
   const candidates = [
     CREDENTIALS_FILE,
     path.join(APP_DIR, '.env'),
+    path.join(ROOT_DIR, 'credentials'),
+    path.join(ROOT_DIR, '.env'),
     path.resolve(import.meta.dir, '../../../.env'), // monorepo root (dev mode)
   ];
 
@@ -136,16 +141,16 @@ export function isDaemonRunning(): boolean {
   return getDaemonPid() !== null;
 }
 
-/** Read the daemon port from the port file, falling back to the default. */
-export function getDaemonPort(): number {
+/** Read the selected daemon port, or null before it has started. */
+export function getDaemonPort(): number | null {
   try {
     const raw = readFileSync(PORT_FILE, 'utf-8').trim();
     const port = Number(raw);
-    if (port > 0 && port < 65536) return port;
+    if (Number.isInteger(port) && port > 0 && port < 65536) return port;
   } catch {
     // Port file doesn't exist or is unreadable
   }
-  return DEFAULT_PORT;
+  return null;
 }
 
 /**
@@ -173,57 +178,36 @@ export function spawnDaemon(): void {
 }
 
 /**
- * Wait for the daemon's health endpoint to respond.
- * Polls every 200ms for up to `timeoutMs` milliseconds.
- */
-async function waitForDaemon(port: number, timeoutMs = 5000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    let response: Response | undefined;
-    try {
-      response = await fetch(`${daemonUrl(port)}/health`, {
-        headers: authorizationHeaders(getDaemonToken()),
-        redirect: 'error',
-        signal: AbortSignal.timeout(1000),
-      });
-    } catch {
-      // Not ready yet
-    }
-    if (response) {
-      requireSecureDaemon(response);
-      return true;
-    }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  return false;
-}
-
-/**
- * Ensure the daemon is running. Spawns it if needed and waits for health.
- * Returns the base URL for TelegramClient.
+ * Discover the selected account's bound port and wait for authenticated health.
+ * Polls every 100ms for up to five seconds.
  */
 export async function ensureDaemon(): Promise<{ port: number; url: string }> {
-  if (!isDaemonRunning()) {
-    getDaemonToken();
-    spawnDaemon();
-  }
-
-  const port = getDaemonPort();
-  const url = daemonUrl(port);
-
-  const ready = await waitForDaemon(port);
-  if (!ready) {
-    // The port file might not exist yet — re-read after spawn
-    const retryPort = getDaemonPort();
-    if (retryPort !== port) {
-      const retryUrl = daemonUrl(retryPort);
-      const retryReady = await waitForDaemon(retryPort);
-      if (retryReady) return { port: retryPort, url: retryUrl };
+  const token = getDaemonToken();
+  if (!isDaemonRunning()) spawnDaemon();
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const port = getDaemonPort();
+    if (port) {
+      let response: Response | undefined;
+      try {
+        response = await fetch(`${daemonUrl(port)}/health`, {
+          headers: authorizationHeaders(token),
+          redirect: 'error',
+          signal: AbortSignal.timeout(1000),
+        });
+      } catch {
+        /* Still starting. */
+      }
+      if (response) {
+        requireSecureDaemon(response);
+        return { port, url: daemonUrl(port) };
+      }
     }
-    throw new Error('Daemon did not respond to authenticated health check within 5 seconds');
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-
-  return { port, url };
+  throw new Error(
+    'Selected account daemon did not respond to an authenticated health check within 5 seconds',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +226,9 @@ export async function ensureDaemon(): Promise<{ port: number; url: string }> {
  *   5. Crash handlers (uncaughtException, unhandledRejection)
  */
 export async function runDaemonMode(): Promise<void> {
+  const account = selectedAccount();
+  const releaseStartup = acquireAccountLocks([account]);
+  requireAccount(account);
   ensurePrivateDirectory(APP_DIR);
 
   // Check for existing daemon
@@ -294,6 +281,7 @@ export async function runDaemonMode(): Promise<void> {
   });
 
   writeFileSync(PORT_FILE, String(proxy.port));
+  releaseStartup();
   daemonLog(`Daemon ready (PID ${process.pid}, port ${proxy.port})`);
 
   // Try to log username

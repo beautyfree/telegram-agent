@@ -16,12 +16,13 @@ export {
   LOG_FILE,
   PID_FILE,
   PORT_FILE,
+  ROOT_DIR,
 } from '@tg/protocol/paths';
 
-import { APP_DIR, CREDENTIALS_FILE } from '@tg/protocol/paths';
+import { APP_DIR, CREDENTIALS_FILE, ROOT_DIR } from '@tg/protocol/paths';
 
 /** Default HTTP server port. */
-export const DEFAULT_PORT = 7312;
+export const DEFAULT_PORT = 0;
 
 /** Idle timeout in milliseconds (10 minutes). */
 export const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -58,6 +59,8 @@ export function loadCredentials(): TdlibCredentials {
   const candidates = [
     CREDENTIALS_FILE,
     path.join(APP_DIR, '.env'),
+    path.join(ROOT_DIR, 'credentials'),
+    path.join(ROOT_DIR, '.env'),
     path.resolve(import.meta.dir, '../../../.env'),
     path.resolve(import.meta.dir, '../../.env'),
     path.resolve(import.meta.dir, '../.env'),

@@ -1,12 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
+  ACCOUNT_NAME,
   APP_DIR,
   CREDENTIALS_FILE,
   findTdjsonPath,
   getInstalledTdjsonPath,
   PID_FILE,
   PORT_FILE,
+  ROOT_DIR,
 } from '@tg/protocol/paths';
 import type { Command } from 'commander';
 
@@ -70,6 +72,10 @@ function checkConfig(): Check {
     return { name: 'Config', status: 'ok', detail: 'credentials found' };
   }
 
+  if (existsSync(path.join(ROOT_DIR, 'credentials')) || existsSync(path.join(ROOT_DIR, '.env'))) {
+    return { name: 'Config', status: 'ok', detail: 'shared API credentials found' };
+  }
+
   // 4. Built-in credentials (compiled binary)
   if (process.env.TG_BUILTIN_API_ID && process.env.TG_BUILTIN_API_HASH) {
     return { name: 'Config', status: 'ok', detail: 'built-in credentials' };
@@ -96,7 +102,7 @@ export function register(parent: Command): void {
       const version = process.env.TG_VERSION ?? '0.0.0-dev';
       const checks: Check[] = [checkBinary(), checkTdlib(), checkConfig(), checkDaemon()];
 
-      console.log(`\ntelegram-agent v${version}\n`);
+      console.log(`\ntelegram-agent v${version} — account ${ACCOUNT_NAME}\n`);
 
       const nameWidth = 10;
       const statusWidth = 6;

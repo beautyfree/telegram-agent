@@ -1,5 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { selectedAccount } from '@tg/protocol/accounts';
 import type { Command } from 'commander';
+import { stopAccountServices } from '../account-runtime';
 import { ensureDaemon, getDaemonPid, LOG_FILE } from '../daemon';
 import { fail, success } from '../output';
 
@@ -12,7 +15,8 @@ export function register(parent: Command): void {
     .action(async () => {
       const existingPid = getDaemonPid();
       if (existingPid) {
-        success({ already_running: true, pid: existingPid });
+        const { port } = await ensureDaemon();
+        success({ already_running: true, pid: existingPid, port });
       } else {
         const { url } = await ensureDaemon();
         const pid = getDaemonPid();
@@ -27,18 +31,16 @@ export function register(parent: Command): void {
 
   daemon
     .command('stop')
-    .description('Stop the background daemon')
-    .action(() => {
+    .description('Stop the selected account background daemon')
+    .action(async () => {
       const pid = getDaemonPid();
-      if (pid) {
-        process.kill(pid, 'SIGTERM');
-        success({ stopped: true, pid });
-      } else {
-        // `stop` is intentionally idempotent: a daemon that has already
-        // exited has reached the requested state.
-        success({ stopped: false, already_stopped: true });
+      const release = acquireAccountLocks([selectedAccount()]);
+      try {
+        await stopAccountServices(undefined, ['tg_daemon']);
+      } finally {
+        release();
       }
-      process.exit(0);
+      success(pid ? { stopped: true, pid } : { stopped: false, already_stopped: true });
     });
 
   daemon

@@ -17,7 +17,8 @@
     "@clack/prompts": "^1.1.0",
     "@huggingface/transformers": "next",
     "@tg/protocol": "workspace:*",
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "tar": "7.5.22"
   },
   "devDependencies": {
     "@types/bun": "latest",
