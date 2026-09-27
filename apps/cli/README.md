@@ -22,6 +22,91 @@ telegram-agent me                        # Verify connection
 ```
 
 
+## Multiple accounts
+
+Your existing session is the reserved `default` account. It stays in its original
+location; adding an account never moves or replaces it.
+
+```bash
+telegram-agent accounts add work               # Create profile and sign in interactively
+telegram-agent accounts add personal --no-login # Create profile for later login/import
+telegram-agent accounts login personal         # Phone, code and 2FA flow
+telegram-agent accounts list                   # Profiles, identities and local service state
+telegram-agent accounts current                # Effective selection and saved default
+telegram-agent accounts use work               # Save default for subsequent commands
+telegram-agent --account personal me            # Override for one command
+telegram-agent accounts status work            # Inspect without starting the daemon
+telegram-agent accounts rename work office     # Stop its services, then rename
+telegram-agent accounts remove office --confirm # Delete only its local files
+telegram-agent accounts remove personal --confirm --logout # Revoke session, then delete
+```
+
+`add` does not change the saved default. If login fails or is cancelled, the
+profile remains available for `accounts login NAME`. Names are 1–32 lowercase
+letters, digits, underscores or hyphens, starting with a letter; reserved system
+names are rejected. `default` cannot be renamed, replaced, or removed because its
+directory also contains the named profiles. Use `--account default logout` to
+revoke its authorization.
+
+Selection order is **`--account NAME` > `TG_ACCOUNT` > `accounts use` > `default`**.
+The flag works before or after a subcommand; use `--` before literal arguments
+that resemble flags. An unknown account is an error, never a fallback to another
+account. Every command, including `login`, `logout`, `listen`, `daemon`, `doctor`,
+media operations, and session import/export, uses this selection.
+
+```bash
+telegram-agent --account work listen --chat 12345
+telegram-agent --account personal listen --chat 67890
+TG_ACCOUNT=work telegram-agent chats list
+```
+
+Accounts can run concurrently. A process keeps its account for its whole lifetime,
+so changing the saved default does not redirect existing listeners or daemons.
+For automation, explicitly select the account on every invocation. JSON results
+and streamed events include a top-level `account` field. For management commands,
+this is the invocation's selection; the explicit profile being managed is named
+in `data` (for example `data.name`, `data.added`, or `data.removed`).
+
+`accounts list` is offline; `hasSession` means database files exist, not that they
+are currently authorized. `accounts status` checks authorization only when the
+account's daemon is already running. Use `--account NAME me` for a live check that
+starts it if necessary. Login records a cached ID, name and username for listing.
+
+Named profiles live in `~/.telegram-agent/accounts/NAME/`. `TG_APP_DIR` overrides
+the root, not the selected profile directory. Each profile has its own TDLib
+database, media/model caches, token, logs, and PID/port files. Services bind only to
+loopback and choose available ports automatically. If setting `TG_DAEMON_PORT` or
+`TG_CAPTION_PORT` explicitly, give each concurrently running service a unique port.
+
+Application credentials are resolved from environment variables, then the selected
+profile's `credentials` or `.env`, then root `credentials` or `.env`, then the
+existing development/build defaults. Telegram login sessions are never shared by
+this credential fallback.
+
+Renaming/removing verifies and stops only that profile's services. A running
+service that cannot be authenticated prevents the operation. Removal requires
+`--confirm`; without `--logout` it deletes local files only and does not revoke
+Telegram authorization. Revocation failure preserves the profile. Log out before
+removing it, or revoke it in Telegram's Devices settings if necessary.
+
+## Session portability
+
+```bash
+telegram-agent --account work session export | jq -r '.data.blob' > session.b64
+telegram-agent accounts add restored --no-login
+telegram-agent --account restored session import --stdin < session.b64
+telegram-agent --account restored me
+```
+
+Exports and imports stop the selected Telegram daemon to avoid modifying a live
+database. The next command restarts it. Import requires `--force` to replace an
+existing database. Archives are validated before replacement and may contain only
+regular files/directories under `tdlib_db`, up to 2 GiB expanded and 100,000 entries;
+links and paths outside that directory are rejected. Older macOS AppleDouble
+sidecars are tolerated. Use the same Telegram application credentials when moving
+a session. An export is a credential; keep it private and do not run copies of the
+same session concurrently on different machines.
+
 ## How It Works
 
 A background daemon manages the TDLib connection and auto-starts on first command. TDLib caches your chats, messages, and user data locally, so most reads are instant (~0.2s) without hitting Telegram's servers. The daemon shuts down after 10 minutes of inactivity.
@@ -118,7 +203,7 @@ All commands accepting `<chat>` support:
 
 ## Output
 
-All output is JSON to stdout. Errors and warnings go to stderr. Pipe through `jq` for processing:
+Command results and errors are JSON on stdout, with the selected `account` alongside `ok` and `data`/`error`. Warnings go to stderr. Interactive login, help, doctor, and plain daemon logs are human-readable. Pipe through `jq` for processing:
 
 ```bash
 telegram-agent chats list --unread | jq '.data.items[].title'

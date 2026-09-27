@@ -11,7 +11,6 @@
  */
 
 import { homedir } from 'node:os';
-import { FILES_DIR } from '@tg/protocol/paths';
 import type * as Td from 'tdlib-types';
 import { extractPreview } from './slim';
 import type {
@@ -44,7 +43,6 @@ export type {
 } from './types';
 
 const HOME = homedir();
-const SYMLINK_PREFIX = '~/.tg';
 
 // --- Helpers ---
 
@@ -87,10 +85,9 @@ function formatDuration(seconds: number): string {
 }
 
 function shortenPath(p: string): string {
-  // ~/.tg symlink points to FILES_DIR (media_cache) — use short form
-  if (p.startsWith(FILES_DIR)) return SYMLINK_PREFIX + p.slice(FILES_DIR.length);
+  // Keep the account-specific path; the legacy ~/.tg symlink cannot identify an account.
   // Fallback: replace home dir with ~
-  if (p.startsWith(HOME)) return `~${p.slice(HOME.length)}`;
+  if (p.startsWith(`${HOME}/`)) return `~${p.slice(HOME.length)}`;
   return p;
 }
 

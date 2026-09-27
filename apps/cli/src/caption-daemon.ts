@@ -8,6 +8,8 @@
 
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, selectedAccount } from '@tg/protocol/accounts';
 import { APP_DIR } from '@tg/protocol/paths';
 import {
   ensurePrivateDirectory,
@@ -22,7 +24,7 @@ const MODELS_DIR = path.join(APP_DIR, 'models');
 const DTYPE = 'q4';
 const PID_FILE = path.join(APP_DIR, 'caption.pid');
 const PORT_FILE = path.join(APP_DIR, 'caption.port');
-const DEFAULT_PORT = 7313;
+const DEFAULT_PORT = 0;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const LOG_FILE = path.join(APP_DIR, 'caption.log');
 
@@ -53,6 +55,9 @@ function captionLog(msg: string): void {
 // ---------------------------------------------------------------------------
 
 export async function runCaptionDaemon(): Promise<void> {
+  const account = selectedAccount();
+  const releaseStartup = acquireAccountLocks([account]);
+  requireAccount(account);
   ensurePrivateDirectory(APP_DIR);
   const authToken = getDaemonToken();
 
@@ -122,9 +127,6 @@ export async function runCaptionDaemon(): Promise<void> {
 
   const processor = await processorPromise;
 
-  writeFileSync(PORT_FILE, String(port));
-  captionLog(`Caption daemon ready (PID ${process.pid}, port ${port}, device ${device})`);
-
   // ---------------------------------------------------------------------------
   // Idle timer
   // ---------------------------------------------------------------------------
@@ -150,7 +152,7 @@ export async function runCaptionDaemon(): Promise<void> {
   // ---------------------------------------------------------------------------
 
   let activeRequests = 0;
-  serveLocal({
+  const server = serveLocal({
     authToken,
     port,
     fetch: async (req) => {
@@ -206,6 +208,10 @@ export async function runCaptionDaemon(): Promise<void> {
       return Response.json({ error: 'not found' }, { status: 404 });
     },
   });
+
+  writeFileSync(PORT_FILE, String(server.port));
+  releaseStartup();
+  captionLog(`Caption daemon ready (PID ${process.pid}, port ${server.port}, device ${device})`);
 
   // ---------------------------------------------------------------------------
   // Graceful shutdown

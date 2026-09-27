@@ -1,5 +1,7 @@
 import * as p from '@clack/prompts';
 import { TelegramClient } from '@tg/protocol';
+import { saveIdentity } from '@tg/protocol/accounts';
+import { ACCOUNT_NAME } from '@tg/protocol/paths';
 import type { Command } from 'commander';
 import { ensureDaemon } from '../daemon';
 
@@ -34,7 +36,7 @@ export function register(parent: Command): void {
     .command('login')
     .description('Log in to Telegram (interactive)')
     .action(async () => {
-      p.intro('Telegram Authentication');
+      p.intro(`Telegram Authentication — ${ACCOUNT_NAME}`);
 
       let client: TelegramClient | undefined;
 
@@ -47,6 +49,11 @@ export function register(parent: Command): void {
         // Already logged in
         if (state.ready) {
           const me = await client.invoke({ _: 'getMe' });
+          saveIdentity({
+            id: me.id,
+            firstName: me.first_name,
+            username: me.usernames?.editable_username,
+          });
           p.log.success(formatUser(me));
           p.outro('Already logged in');
           process.exit(0);
@@ -63,7 +70,7 @@ export function register(parent: Command): void {
           });
           if (p.isCancel(phone)) {
             p.cancel('Cancelled');
-            process.exit(0);
+            process.exit(1);
           }
           state = await client.submitPhone(phone);
         }
@@ -96,7 +103,7 @@ export function register(parent: Command): void {
             });
             if (p.isCancel(action)) {
               p.cancel('Cancelled');
-              process.exit(0);
+              process.exit(1);
             }
 
             if (action === 'resend') {
@@ -119,7 +126,7 @@ export function register(parent: Command): void {
             });
             if (p.isCancel(code)) {
               p.cancel('Cancelled');
-              process.exit(0);
+              process.exit(1);
             }
             codeState = await client.submitCode(code);
           }
@@ -139,7 +146,7 @@ export function register(parent: Command): void {
           });
           if (p.isCancel(pw)) {
             p.cancel('Cancelled');
-            process.exit(0);
+            process.exit(1);
           }
           state = await client.submitPassword(pw);
         }
@@ -147,6 +154,11 @@ export function register(parent: Command): void {
         // Done
         if (state.ready) {
           const me = await client.invoke({ _: 'getMe' });
+          saveIdentity({
+            id: me.id,
+            firstName: me.first_name,
+            username: me.usernames?.editable_username,
+          });
           p.outro(formatUser(me));
           process.exit(0);
         }
