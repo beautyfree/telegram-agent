@@ -2,6 +2,8 @@
 import { EventEmitter } from 'node:events';
 import { appendFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount } from '@tg/protocol/accounts';
 import { ACCOUNT_NAME, APP_DIR } from '@tg/protocol/paths';
 import { type ProxyOptions, startProxy } from '@tg/protocol/proxy';
 import {
@@ -29,6 +31,8 @@ const client = Object.assign(new EventEmitter(), {
   },
   async close() {},
 });
+const releaseStartup = acquireAccountLocks([ACCOUNT_NAME]);
+requireAccount(ACCOUNT_NAME);
 const authToken = getDaemonToken();
 const server =
   prefix === 'tg_daemon'
@@ -62,9 +66,14 @@ setInterval(
 writeFileSync(path.join(APP_DIR, `${prefix}.pid`), String(process.pid));
 writeFileSync(path.join(APP_DIR, `${prefix}.port`), String(server.port));
 process.on('SIGTERM', async () => {
+  if (process.env.FIXTURE_STOP_MARKER) {
+    writeFileSync(process.env.FIXTURE_STOP_MARKER, 'stopping');
+    await Bun.sleep(500);
+  }
   await server.stop();
   unlinkSync(path.join(APP_DIR, `${prefix}.pid`));
   unlinkSync(path.join(APP_DIR, `${prefix}.port`));
   process.exit(0);
 });
+releaseStartup();
 console.log(server.port);

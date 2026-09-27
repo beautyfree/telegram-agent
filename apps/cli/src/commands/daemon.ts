@@ -1,4 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { selectedAccount } from '@tg/protocol/accounts';
 import type { Command } from 'commander';
 import { stopAccountServices } from '../account-runtime';
 import { ensureDaemon, getDaemonPid, LOG_FILE } from '../daemon';
@@ -32,7 +34,12 @@ export function register(parent: Command): void {
     .description('Stop the selected account background daemon')
     .action(async () => {
       const pid = getDaemonPid();
-      await stopAccountServices(undefined, ['tg_daemon']);
+      const release = acquireAccountLocks([selectedAccount()]);
+      try {
+        await stopAccountServices(undefined, ['tg_daemon']);
+      } finally {
+        release();
+      }
       success(pid ? { stopped: true, pid } : { stopped: false, already_stopped: true });
     });
 

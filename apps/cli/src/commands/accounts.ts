@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import { TelegramClient } from '@tg/protocol';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
 import {
   addAccount,
   getAccountDir,
@@ -7,15 +9,18 @@ import {
   removeAccount,
   renameAccount,
   requireAccount,
+  saveIdentity,
   selectedAccount,
   useAccount,
   validateAccountName,
 } from '@tg/protocol/accounts';
+import { daemonUrl, getDaemonToken } from '@tg/protocol/security';
 import type { Command } from 'commander';
 import {
   accountAuthState,
   describeAccount,
   runAccountCommand,
+  serviceState,
   stopAccountServices,
 } from '../account-runtime';
 import { fail, success, warn } from '../output';
@@ -48,7 +53,12 @@ export function register(parent: Command): void {
     .option('--no-login', 'Create a profile without interactive login')
     .description('Add an account and log in; does not change the saved default')
     .action(async (name: string, opts: { login: boolean }) => {
-      addAccount(name);
+      const release = acquireAccountLocks([name]);
+      try {
+        addAccount(name);
+      } finally {
+        release();
+      }
       if (opts.login) await runAccountCommand(name, ['login']);
       success({ added: name, active: readActiveAccount(), ...describeAccount(name) });
     });
@@ -66,7 +76,12 @@ export function register(parent: Command): void {
     .argument('<name>')
     .description('Choose the default account for future commands')
     .action((name: string) => {
-      useAccount(name);
+      const release = acquireAccountLocks([name]);
+      try {
+        useAccount(name);
+      } finally {
+        release();
+      }
       success({ active: name });
     });
   accounts
@@ -83,15 +98,20 @@ export function register(parent: Command): void {
     .argument('<new-name>')
     .description('Rename an account after stopping its services')
     .action(async (name: string, newName: string) => {
-      requireAccount(name);
-      validateAccountName(newName);
-      if (name === 'default' || newName === 'default')
-        fail('The default account cannot be renamed or replaced', 'INVALID_ARGS');
-      if (existsSync(getAccountDir(newName)))
-        fail(`Account "${newName}" already exists`, 'INVALID_ARGS');
-      await stopAccountServices(name);
-      renameAccount(name, newName);
-      success({ renamed: name, ...describeAccount(newName), active: readActiveAccount() });
+      const release = acquireAccountLocks([name, newName]);
+      try {
+        requireAccount(name);
+        validateAccountName(newName);
+        if (name === 'default' || newName === 'default')
+          fail('The default account cannot be renamed or replaced', 'INVALID_ARGS');
+        if (existsSync(getAccountDir(newName)))
+          fail(`Account "${newName}" already exists`, 'INVALID_ARGS');
+        await stopAccountServices(name);
+        renameAccount(name, newName);
+        success({ renamed: name, ...describeAccount(newName), active: readActiveAccount() });
+      } finally {
+        release();
+      }
     });
   accounts
     .command('remove')
@@ -111,13 +131,36 @@ export function register(parent: Command): void {
           'The default account cannot be removed; use --account default logout instead',
           'INVALID_ARGS',
         );
-      if (opts.logout) await runAccountCommand(name, ['logout'], true);
-      await stopAccountServices(name);
-      removeAccount(name);
-      if (!opts.logout)
-        warn(
-          'Local files removed. This does not revoke the session on Telegram; use Telegram Devices to revoke it if needed.',
-        );
-      success({ removed: name, active: readActiveAccount(), loggedOut: Boolean(opts.logout) });
+      // Startup takes the same lock. Start first, then hold the lock through revocation and deletion.
+      if (opts.logout) await runAccountCommand(name, ['daemon', 'start'], true);
+      const release = acquireAccountLocks([name]);
+      try {
+        const directory = requireAccount(name);
+        if (opts.logout) {
+          const state = serviceState(directory, 'tg_daemon');
+          if (!state.running || !state.port)
+            throw new Error('Account daemon stopped before logout; profile retained');
+          const client = new TelegramClient({
+            baseUrl: daemonUrl(state.port),
+            authToken: getDaemonToken(directory),
+          });
+          client.signal = AbortSignal.timeout(10_000);
+          try {
+            await client.invoke({ _: 'logOut' });
+            saveIdentity(undefined, name);
+          } finally {
+            client.close();
+          }
+        }
+        await stopAccountServices(name);
+        removeAccount(name);
+        if (!opts.logout)
+          warn(
+            'Local files removed. This does not revoke the session on Telegram; use Telegram Devices to revoke it if needed.',
+          );
+        success({ removed: name, active: readActiveAccount(), loggedOut: Boolean(opts.logout) });
+      } finally {
+        release();
+      }
     });
 }

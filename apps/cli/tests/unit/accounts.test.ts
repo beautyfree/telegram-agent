@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
 import {
   addAccount,
   getAccountDir,
@@ -44,13 +45,14 @@ async function run(args: string[], account = '') {
     clearTimeout(timer);
   }
 }
-async function daemon(account: string, service = 'tg_daemon') {
+async function daemon(account: string, service = 'tg_daemon', stopMarker?: string) {
   const child = Bun.spawn([process.execPath, FIXTURE], {
     env: {
       ...process.env,
       TG_APP_DIR: root,
       TG_ACCOUNT: account,
       FIXTURE_SERVICE: service,
+      FIXTURE_STOP_MARKER: stopMarker,
       FIXTURE_LOGOUT_RECORD: path.join(root, 'logout-record'),
     },
     stdout: 'pipe',
@@ -284,4 +286,61 @@ test('profile credentials override shared credentials and never fall back to ano
   expect((await credentials()).apiId).toBe(20);
   rmSync(path.join(directory, 'credentials'));
   expect((await credentials()).apiId).toBe(10);
+});
+
+test('locked profiles refuse real daemon startup and state mutations without touching sessions', async () => {
+  const directory = addAccount('work', root);
+  mkdirSync(path.join(directory, 'tdlib_db'));
+  writeFileSync(path.join(directory, 'tdlib_db/session'), 'keep');
+  const release = acquireAccountLocks(['work'], root);
+  try {
+    for (const args of [
+      ['--account', 'work', '--daemon'],
+      ['--account', 'work', '--caption-daemon'],
+      ['accounts', 'remove', 'work', '--confirm'],
+      ['accounts', 'rename', 'work', 'office'],
+      ['--account', 'work', 'session', 'export'],
+      ['--account', 'work', 'session', 'import', '--force', '--string', 'eA=='],
+    ]) {
+      const result = await run(args);
+      expect(result.status).toBe(1);
+      expect(result.json.error).toContain('is busy');
+    }
+    // The standalone daemon must neither start nor clean up another process's PID on lock contention.
+    writeFileSync(path.join(directory, 'tg_daemon.pid'), String(process.pid));
+    const standalone = Bun.spawn(
+      [process.execPath, path.resolve(import.meta.dir, '../../../daemon/src/index.ts')],
+      {
+        env: { ...process.env, TG_APP_DIR: root, TG_ACCOUNT: 'work' },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    );
+    expect(await standalone.exited).toBe(1);
+    expect(await new Response(standalone.stderr).text()).toContain('is busy');
+    expect(readFileSync(path.join(directory, 'tg_daemon.pid'), 'utf8')).toBe(String(process.pid));
+    rmSync(path.join(directory, 'tg_daemon.pid'));
+    expect(readFileSync(path.join(directory, 'tdlib_db/session'), 'utf8')).toBe('keep');
+    expect(existsSync(path.join(directory, 'tg_daemon.pid'))).toBe(false);
+    expect(existsSync(path.join(directory, 'caption.pid'))).toBe(false);
+  } finally {
+    release();
+  }
+});
+
+test('removal keeps startup excluded while waiting for the second service to stop', async () => {
+  const directory = addAccount('work', root);
+  await daemon('work');
+  const marker = path.join(root, 'caption-stopping');
+  await daemon('work', 'caption', marker);
+  const removal = run(['accounts', 'remove', 'work', '--confirm']);
+  const deadline = Date.now() + 4000;
+  while (!existsSync(marker) && Date.now() < deadline) await Bun.sleep(10);
+  expect(existsSync(marker)).toBe(true);
+  const restart = await run(['--account', 'work', '--daemon']);
+  expect(restart.status).toBe(1);
+  expect(restart.json.error).toContain('is busy');
+  expect((await removal).status).toBe(0);
+  expect(existsSync(directory)).toBe(false);
+  expect(existsSync(path.join(root, '.account-locks/work'))).toBe(false);
 });

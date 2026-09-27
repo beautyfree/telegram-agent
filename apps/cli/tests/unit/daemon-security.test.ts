@@ -110,3 +110,18 @@ test('caption client uses authenticated health and caption requests', async () =
   expect(JSON.parse(result.stdout).text).toBe('Fixture caption');
   expect(routes).toEqual(['/health', '/caption']);
 });
+
+test('legacy stop fails safely with actionable recovery guidance', async () => {
+  server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch: () => Response.json({ ok: true, pid: process.pid }),
+  });
+  state('tg_daemon');
+  const result = await run(['run', CLI, 'daemon', 'stop']);
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('OLD CLI');
+  expect(result.stdout).toContain('verify the process identity');
+  expect(result.stdout).toContain('Do not blindly signal a saved PID');
+  expect((await fetch(`http://127.0.0.1:${server.port}/health`)).ok).toBe(true);
+});

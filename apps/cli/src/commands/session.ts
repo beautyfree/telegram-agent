@@ -19,7 +19,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { saveIdentity } from '@tg/protocol/accounts';
+import { acquireAccountLocks } from '@tg/protocol/account-lock';
+import { requireAccount, saveIdentity, selectedAccount } from '@tg/protocol/accounts';
 import { APP_DIR, DB_DIR } from '@tg/protocol/paths';
 import type { Command } from 'commander';
 import { stopAccountServices } from '../account-runtime';
@@ -48,20 +49,26 @@ export function register(parent: Command): void {
       'Dump the current TDLib session as a base64 blob (=credential — treat as password)',
     )
     .action(async () => {
-      // No client needed — pure file-system snapshot of TDLib's DB dir.
-      if (!existsSync(DB_DIR)) {
-        fail(`No session found at ${DB_DIR}. Run \`telegram-agent login\` first.`, 'NOT_FOUND');
+      const release = acquireAccountLocks([selectedAccount()]);
+      try {
+        requireAccount(selectedAccount());
+        // No client needed — pure file-system snapshot of TDLib's DB dir.
+        if (!existsSync(DB_DIR)) {
+          fail(`No session found at ${DB_DIR}. Run \`telegram-agent login\` first.`, 'NOT_FOUND');
+        }
+        await stopAccountServices(undefined, ['tg_daemon']);
+        const r = runTar(['-C', path.dirname(DB_DIR), '-czf', '-', path.basename(DB_DIR)]);
+        if (!r.ok) fail(`tar failed while exporting session: ${r.stderr.trim()}`, 'UNKNOWN');
+        const blob = r.stdout.toString('base64');
+        success({
+          format: 'tdlib-session-tar.b64.v1',
+          sessionDir: DB_DIR,
+          bytes: r.stdout.length,
+          blob,
+        });
+      } finally {
+        release();
       }
-      await stopAccountServices(undefined, ['tg_daemon']);
-      const r = runTar(['-C', path.dirname(DB_DIR), '-czf', '-', path.basename(DB_DIR)]);
-      if (!r.ok) fail(`tar failed while exporting session: ${r.stderr.trim()}`, 'UNKNOWN');
-      const blob = r.stdout.toString('base64');
-      success({
-        format: 'tdlib-session-tar.b64.v1',
-        sessionDir: DB_DIR,
-        bytes: r.stdout.length,
-        blob,
-      });
     });
 
   // --- session import ---
@@ -80,26 +87,32 @@ export function register(parent: Command): void {
       }
       if (!blob) fail('Pass the blob via --string "<base64>" or --stdin', 'INVALID_ARGS');
 
-      if (existsSync(DB_DIR) && !opts.force) {
-        fail(
-          `A session already exists at ${DB_DIR}. Re-run with --force to overwrite, ` +
-            'or `telegram-agent logout` first.',
-          'PERMISSION',
-        );
-      }
-
-      const tarBytes = Buffer.from(blob, 'base64');
-      if (tarBytes.length === 0) fail('Decoded blob is empty — wrong format?', 'INVALID_ARGS');
-
-      await stopAccountServices(undefined, ['tg_daemon']);
+      const release = acquireAccountLocks([selectedAccount()]);
       try {
-        importSessionArchive(tarBytes, APP_DIR);
-      } catch (error) {
-        fail((error as Error).message, 'INVALID_ARGS');
-      }
-      saveIdentity(undefined);
+        requireAccount(selectedAccount());
+        if (existsSync(DB_DIR) && !opts.force) {
+          fail(
+            `A session already exists at ${DB_DIR}. Re-run with --force to overwrite, ` +
+              'or `telegram-agent logout` first.',
+            'PERMISSION',
+          );
+        }
 
-      warn('Session imported. Run `telegram-agent me` to verify it authenticates.');
-      success({ sessionDir: DB_DIR, bytes: tarBytes.length });
+        const tarBytes = Buffer.from(blob, 'base64');
+        if (tarBytes.length === 0) fail('Decoded blob is empty — wrong format?', 'INVALID_ARGS');
+
+        await stopAccountServices(undefined, ['tg_daemon']);
+        try {
+          importSessionArchive(tarBytes, APP_DIR);
+        } catch (error) {
+          fail((error as Error).message, 'INVALID_ARGS');
+        }
+        saveIdentity(undefined);
+
+        warn('Session imported. Run `telegram-agent me` to verify it authenticates.');
+        success({ sessionDir: DB_DIR, bytes: tarBytes.length });
+      } finally {
+        release();
+      }
     });
 }

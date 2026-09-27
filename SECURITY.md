@@ -73,3 +73,20 @@ staging directory, rejects links and paths outside `tdlib_db`, and replaces only
 the selected account's database. Export/import stops its daemon first. Local
 profile deletion does not revoke a copied session; use `accounts remove NAME
 --confirm --logout` or Telegram's Devices settings to revoke authorization.
+
+### Interrupted operations and upgrade recovery
+
+Startup, profile rename/removal, logout and session export/import serialize through
+private lock directories at `ROOT/.account-locks/NAME`. A conflicting operation
+fails with an account-busy error; retry after the operation finishes. Rename locks
+both names. Locks stay outside the moved/deleted profile. Normal exit releases them.
+After a forced kill or machine crash, a lock deliberately remains: inspect its
+`owner.pid` and verify that the owning operation has ended before manually removing
+that specific lock directory. Do not remove a lock merely because an operation is slow.
+
+If the binary was already upgraded while a legacy daemon was running, the new
+`daemon stop` cannot authenticate that old process. Inspect `tg_daemon.pid` and
+`caption.pid` in the selected profile and verify each process's executable and
+command line with your OS process manager before stopping it manually. A stale PID
+may belong to another program; never kill it based on the PID file alone. Restart
+with the updated CLI afterward. Never delete the session directory to fix this.
