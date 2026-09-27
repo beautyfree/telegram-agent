@@ -25,7 +25,7 @@
     "typescript": "^5.7.2"
   },
   "version": "2.1.1",
-  "description": "Telegram CLI for AI agents — TDLib-powered fork of avemeva/kurier with reaction-tags, session export, and skill bundle.",
+  "description": "Telegram CLI for AI agents — powered by TDLib with reaction tags, session export, and a skill bundle.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/beautyfree/telegram-agent.git"
