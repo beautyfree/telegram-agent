@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./proxy": "./src/proxy/index.ts",
-    "./paths": "./src/paths.ts"
+    "./paths": "./src/paths.ts",
+    "./security": "./src/security.ts"
   },
   "dependencies": {
     "tdl": "^8.0.2",
@@ -18,6 +19,7 @@
     "typescript": "^5.7.2"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests"
   }
 }

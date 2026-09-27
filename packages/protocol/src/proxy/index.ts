@@ -4,6 +4,13 @@ import tdl from 'tdl';
 import type * as Td from 'tdlib-types';
 import type { Invoke } from 'tdlib-types';
 import { DB_DIR, FILES_DIR } from '../paths';
+import {
+  daemonUrl,
+  PROTOCOL_HEADER,
+  PROTOCOL_VERSION,
+  resolveMediaPath,
+  serveLocal,
+} from '../security';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -12,12 +19,6 @@ import { DB_DIR, FILES_DIR } from '../paths';
 const DEFAULT_DB_DIR = DB_DIR;
 const DEFAULT_FILES_DIR = FILES_DIR;
 const DEFAULT_PORT = 7312;
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-} as const;
 
 const bigIntReplacer = (_key: string, value: unknown) =>
   typeof value === 'bigint' ? value.toString() : value;
@@ -52,6 +53,11 @@ function mimeFromExtension(ext: string): string {
 // ---------------------------------------------------------------------------
 
 export interface ProxyOptions {
+  /** Secret shared only with local CLI processes. */
+  authToken: string;
+  /** Shut down after real request inactivity; health probes do not count. */
+  idleTimeoutMs?: number;
+  onIdle?: () => void;
   /** Telegram API ID. Required when `client` is not provided. */
   apiId?: number;
   /** Telegram API hash. Required when `client` is not provided. */
@@ -86,7 +92,7 @@ export interface ProxyHandle {
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, bigIntReplacer), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 }
 
@@ -228,25 +234,11 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   // --- 6. Media file serving ---
 
   function serveMediaFile(relPath: string): Response {
-    // Try filesDir (media_cache) first, then dbDir (tdlib_db) for profile photos
-    let filePath = path.resolve(path.join(filesDir, relPath));
-
-    if (!filePath.startsWith(filesDir)) {
-      return new Response('Forbidden', { status: 403, headers: CORS });
+    const filePath = resolveMediaPath(filesDir, relPath);
+    if (!filePath) {
+      return new Response('Not found', { status: 404 });
     }
-
-    let file = Bun.file(filePath);
-    if (!file.size) {
-      // Fall back to dbDir (profile photos are stored under tdlib_db/)
-      filePath = path.resolve(path.join(dbDir, relPath));
-      if (!filePath.startsWith(dbDir)) {
-        return new Response('Forbidden', { status: 403, headers: CORS });
-      }
-      file = Bun.file(filePath);
-      if (!file.size) {
-        return new Response('Not found', { status: 404, headers: CORS });
-      }
-    }
+    const file = Bun.file(filePath);
 
     const ext = path.extname(filePath).slice(1);
     const mime = mimeFromExtension(ext);
@@ -254,8 +246,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
     return new Response(file, {
       headers: {
         'Content-Type': mime,
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        ...CORS,
+        'Cache-Control': 'no-store',
       },
     });
   }
@@ -269,35 +260,20 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
       if (!mediaUrl || typeof mediaUrl !== 'string') {
         return Response.json(
           { ok: false, error: 'Missing mediaUrl' },
-          { status: 400, headers: CORS },
+          { status: 400, headers: { 'Cache-Control': 'no-store' } },
         );
       }
       const relPath = mediaUrl.replace(/^\/api\/media\//, '');
-      // Resolve to absolute path — try filesDir first, then dbDir
-      let filePath = path.resolve(path.join(filesDir, relPath));
-      if (!filePath.startsWith(filesDir)) {
-        return Response.json({ ok: false, error: 'Forbidden' }, { status: 403, headers: CORS });
-      }
-      let file = Bun.file(filePath);
-      if (!file.size) {
-        filePath = path.resolve(path.join(dbDir, relPath));
-        if (!filePath.startsWith(dbDir)) {
-          return Response.json({ ok: false, error: 'Forbidden' }, { status: 403, headers: CORS });
-        }
-        file = Bun.file(filePath);
-        if (!file.size) {
-          return Response.json(
-            { ok: false, error: 'File not found' },
-            { status: 404, headers: CORS },
-          );
-        }
+      const filePath = resolveMediaPath(filesDir, relPath);
+      if (!filePath) {
+        return Response.json({ ok: false, error: 'File not found' }, { status: 404 });
       }
       Bun.spawn(['open', filePath]);
-      return Response.json({ ok: true }, { headers: CORS });
+      return Response.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
     } catch {
       return Response.json(
         { ok: false, error: 'Failed to open file' },
-        { status: 500, headers: CORS },
+        { status: 500, headers: { 'Cache-Control': 'no-store' } },
       );
     }
   }
@@ -374,10 +350,9 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-store',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
-        ...CORS,
       },
     });
   }
@@ -555,63 +530,91 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   }
 
   function handleHealth(): Response {
-    return jsonResponse({
-      ok: true,
-      uptime: Math.floor((Date.now() - startTime) / 1000),
-      pid: process.pid,
-      connections: sseConnectionCount,
-    });
+    return Response.json(
+      {
+        ok: true,
+        uptime: Math.floor((Date.now() - startTime) / 1000),
+        pid: process.pid,
+        connections: sseConnectionCount,
+      },
+      { headers: { [PROTOCOL_HEADER]: PROTOCOL_VERSION, 'Cache-Control': 'no-store' } },
+    );
   }
 
   // --- 8. Start HTTP server ---
 
-  const httpServer = Bun.serve({
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let activeRequests = 0;
+  let stopped = false;
+  function resetIdleTimer(): void {
+    clearTimeout(idleTimer);
+    if (stopped || !options.idleTimeoutMs || !options.onIdle) return;
+    idleTimer = setTimeout(() => {
+      if (sseConnectionCount > 0 || activeRequests > 0) resetIdleTimer();
+      else options.onIdle?.();
+    }, options.idleTimeoutMs);
+  }
+
+  async function route(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    if (url.pathname === '/api/tg/invoke' && req.method === 'POST') {
+      return handleInvoke(req);
+    }
+    if (url.pathname === '/api/tg/updates' && req.method === 'GET') {
+      return handleUpdates(req);
+    }
+    if (url.pathname === '/api/tg/auth/state' && req.method === 'GET') {
+      return handleAuthState();
+    }
+    if (url.pathname === '/api/tg/auth/phone' && req.method === 'POST') {
+      return handleAuthPhone(req);
+    }
+    if (url.pathname === '/api/tg/auth/code' && req.method === 'POST') {
+      return handleAuthCode(req);
+    }
+    if (url.pathname === '/api/tg/auth/password' && req.method === 'POST') {
+      return handleAuthPassword(req);
+    }
+    if (url.pathname === '/api/tg/auth/resend' && req.method === 'POST') {
+      return handleAuthResend();
+    }
+    if (url.pathname === '/api/tg/auth/logout' && req.method === 'POST') {
+      return handleAuthLogout();
+    }
+    if (url.pathname.startsWith('/api/media/') && req.method === 'GET') {
+      const relPath = url.pathname.replace(/^\/api\/media\//, '');
+      return serveMediaFile(relPath);
+    }
+    if (url.pathname === '/api/open' && req.method === 'POST') {
+      return handleOpenFile(req);
+    }
+    if (url.pathname === '/health' && req.method === 'GET') {
+      return handleHealth();
+    }
+
+    return new Response('Not found', { status: 404 });
+  }
+
+  const httpServer = serveLocal({
+    authToken: options.authToken,
     port,
     async fetch(req) {
-      const url = new URL(req.url);
-
-      if (req.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: CORS });
+      const isHealth = new URL(req.url).pathname === '/health';
+      if (!isHealth) {
+        activeRequests++;
+        resetIdleTimer();
       }
-
-      if (url.pathname === '/api/tg/invoke' && req.method === 'POST') {
-        return handleInvoke(req);
+      try {
+        return await route(req);
+      } finally {
+        if (!isHealth) {
+          activeRequests--;
+          resetIdleTimer();
+        }
       }
-      if (url.pathname === '/api/tg/updates' && req.method === 'GET') {
-        return handleUpdates(req);
-      }
-      if (url.pathname === '/api/tg/auth/state' && req.method === 'GET') {
-        return handleAuthState();
-      }
-      if (url.pathname === '/api/tg/auth/phone' && req.method === 'POST') {
-        return handleAuthPhone(req);
-      }
-      if (url.pathname === '/api/tg/auth/code' && req.method === 'POST') {
-        return handleAuthCode(req);
-      }
-      if (url.pathname === '/api/tg/auth/password' && req.method === 'POST') {
-        return handleAuthPassword(req);
-      }
-      if (url.pathname === '/api/tg/auth/resend' && req.method === 'POST') {
-        return handleAuthResend();
-      }
-      if (url.pathname === '/api/tg/auth/logout' && req.method === 'POST') {
-        return handleAuthLogout();
-      }
-      if (url.pathname.startsWith('/api/media/') && req.method === 'GET') {
-        const relPath = url.pathname.replace(/^\/api\/media\//, '');
-        return serveMediaFile(relPath);
-      }
-      if (url.pathname === '/api/open' && req.method === 'POST') {
-        return handleOpenFile(req);
-      }
-      if (url.pathname === '/health' && req.method === 'GET') {
-        return handleHealth();
-      }
-
-      return new Response('Not found', { status: 404, headers: CORS });
     },
   });
+  resetIdleTimer();
 
   // --- 9. Return handle ---
 
@@ -619,10 +622,12 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
 
   return {
     port: actualPort,
-    url: `http://localhost:${actualPort}`,
+    url: daemonUrl(actualPort),
     client,
     async stop() {
-      httpServer.stop();
+      stopped = true;
+      clearTimeout(idleTimer);
+      httpServer.stop(true);
       await client.close();
     },
   };

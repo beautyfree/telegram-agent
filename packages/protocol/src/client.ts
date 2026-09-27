@@ -1,15 +1,18 @@
 import type { Invoke, Update } from 'tdlib-types';
+import { authorizationHeaders, getDaemonToken } from './security';
 import { type AuthState, type DaemonResponse, TelegramError } from './types';
 
 export interface TelegramClientOptions {
   /** Base URL of the proxy, e.g. "http://localhost:7312" */
   baseUrl: string;
+  authToken?: string;
 }
 
 type UpdateHandler = (update: Update) => void;
 
 export class TelegramClient {
   private baseUrl: string;
+  private authToken: string;
   private handlers = new Set<UpdateHandler>();
   private abortController: AbortController | null = null;
   private sseConnected = false;
@@ -21,6 +24,19 @@ export class TelegramClient {
 
   constructor(opts: TelegramClientOptions | string) {
     this.baseUrl = typeof opts === 'string' ? opts : opts.baseUrl;
+    const url = new URL(this.baseUrl);
+    if (
+      url.protocol !== 'http:' ||
+      !['127.0.0.1', 'localhost'].includes(url.hostname) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== '/'
+    ) {
+      throw new Error('TelegramClient requires a local HTTP daemon URL');
+    }
+    this.authToken = (typeof opts === 'string' ? undefined : opts.authToken) ?? getDaemonToken();
     // Strip trailing slash
     if (this.baseUrl.endsWith('/')) {
       this.baseUrl = this.baseUrl.slice(0, -1);
@@ -36,8 +52,9 @@ export class TelegramClient {
   invoke = (async (params: Record<string, unknown>) => {
     const res = await fetch(`${this.baseUrl}/api/tg/invoke`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authorizationHeaders(this.authToken) },
       body: JSON.stringify(params),
+      redirect: 'error',
       signal: this.signal,
     });
 
@@ -73,7 +90,11 @@ export class TelegramClient {
   // --- Auth helpers ---
 
   async getAuthState(): Promise<AuthState> {
-    const res = await fetch(`${this.baseUrl}/api/tg/auth/state`, { signal: this.signal });
+    const res = await fetch(`${this.baseUrl}/api/tg/auth/state`, {
+      signal: this.signal,
+      headers: authorizationHeaders(this.authToken),
+      redirect: 'error',
+    });
     const json = (await res.json()) as DaemonResponse<AuthState>;
     if (!json.ok) throw new TelegramError(json.error);
     return json.data;
@@ -82,8 +103,9 @@ export class TelegramClient {
   async submitPhone(phone: string): Promise<AuthState> {
     const res = await fetch(`${this.baseUrl}/api/tg/auth/phone`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authorizationHeaders(this.authToken) },
       body: JSON.stringify({ phone }),
+      redirect: 'error',
       signal: this.signal,
     });
     const json = (await res.json()) as DaemonResponse<AuthState>;
@@ -94,8 +116,9 @@ export class TelegramClient {
   async submitCode(code: string): Promise<AuthState> {
     const res = await fetch(`${this.baseUrl}/api/tg/auth/code`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authorizationHeaders(this.authToken) },
       body: JSON.stringify({ code }),
+      redirect: 'error',
       signal: this.signal,
     });
     const json = (await res.json()) as DaemonResponse<AuthState>;
@@ -106,6 +129,8 @@ export class TelegramClient {
   async resendCode(): Promise<AuthState> {
     const res = await fetch(`${this.baseUrl}/api/tg/auth/resend`, {
       method: 'POST',
+      headers: authorizationHeaders(this.authToken),
+      redirect: 'error',
       signal: this.signal,
     });
     const json = (await res.json()) as DaemonResponse<AuthState>;
@@ -116,8 +141,9 @@ export class TelegramClient {
   async submitPassword(password: string): Promise<AuthState> {
     const res = await fetch(`${this.baseUrl}/api/tg/auth/password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authorizationHeaders(this.authToken) },
       body: JSON.stringify({ password }),
+      redirect: 'error',
       signal: this.signal,
     });
     const json = (await res.json()) as DaemonResponse<AuthState>;
@@ -161,6 +187,8 @@ export class TelegramClient {
 
       try {
         const res = await fetch(`${this.baseUrl}/api/tg/updates`, {
+          headers: authorizationHeaders(this.authToken),
+          redirect: 'error',
           signal: this.abortController?.signal,
         });
 
