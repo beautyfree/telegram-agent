@@ -65,6 +65,22 @@ jobs:
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: bun run apps/cli/scripts/build.ts --release
 
+      - name: Verify packaged macOS signature
+        if: matrix.os == 'darwin'
+        shell: bash
+        run: |
+          package_dir="$PWD/apps/cli/dist/telegram-agent-${{ matrix.os }}-${{ matrix.arch }}"
+          check_dir=$(mktemp -d)
+          trap 'rm -rf "$check_dir"' EXIT
+          npm pack "$package_dir" --pack-destination "$check_dir" --ignore-scripts
+          mkdir "$check_dir/unpacked"
+          tar -xzf "$check_dir"/*.tgz -C "$check_dir/unpacked"
+          binary="$check_dir/unpacked/package/bin/telegram-agent"
+          codesign --verify --strict --verbose=2 "$binary"
+          export TG_APP_DIR="$check_dir/state"
+          "$binary" --version
+          "$binary" --help
+
       - name: Smoke test (Unix)
         if: matrix.os != 'win32'
         run: |

@@ -1,5 +1,7 @@
 # Careful direct-message outreach
 
+Choose the account using the main skill’s account-selection rules. Replace `NAME` below with that profile and keep the same account throughout this workflow. Include it in any action approval.
+
 Use this only for consensual, relevant outreach. The default is to prepare drafts, not send them.
 
 ## Plan before sending
@@ -15,14 +17,14 @@ Do not make a list from private chat history unless the user clearly names the s
 ## Per-recipient flow
 
 ```bash
-telegram-agent info @person
-telegram-agent msg list @person --limit 20
+telegram-agent --account NAME info @person
+telegram-agent --account NAME msg list @person --limit 20
 ```
 
 Use the context only to avoid duplication and personalise the draft. Show the final text and recipient to the user. Send only after approval:
 
 ```bash
-telegram-agent action send @person "A reviewed, personal message"
+telegram-agent --account NAME action send @person "A reviewed, personal message"
 ```
 
 The returned message is in `.data`; record its ID only if the user asks for tracking.
