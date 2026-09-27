@@ -4,6 +4,22 @@ All notable changes to `telegram-agent` are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] — 2026-09-27
+
+### Added
+- Named Telegram accounts with isolated sessions, media caches, tokens and services.
+- Account lifecycle locks prevent daemon startup during profile changes and session transfers.
+
+### Fixed
+- Authenticate local daemon endpoints, bind to loopback, reject browser requests and isolate media from session files.
+- Sign finished macOS binaries and verify signatures after npm packaging.
+- Preserve native process failures in the npm wrapper, including SIGKILL exit code 137.
+
+### Upgrade notes
+- Stop existing Telegram and caption daemons before upgrading. Already-running processes are not secured by replacing the binary. See SECURITY.md for recovery if already upgraded.
+- Existing sessions remain the `default` account. Use `--account NAME` in automation.
+- Direct unauthenticated HTTP access and media serving from the session database are no longer supported.
+
 ## [2.0.0] — 2026-07-23
 
 ### Changed
